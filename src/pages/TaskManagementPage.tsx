@@ -487,16 +487,15 @@ export default function TaskManagementPage() {
                                             <div key={m.keyword} className="flex items-center gap-2 text-xs">
                                                 <code className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-100 font-mono font-semibold">{m.keyword}</code>
                                                 <span className="text-text-muted">→</span>
-                                                <span className={`px-2 py-0.5 rounded-md border font-medium ${
-                                                    m.isPaid ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                                    : m.serverStatus === 'completed' ? 'bg-purple-50 text-purple-700 border-purple-100'
-                                                    : m.serverStatus === 'in-progress' ? 'bg-amber-50 text-amber-700 border-amber-100'
-                                                    : 'bg-gray-50 text-gray-600 border-gray-100'
-                                                }`}>
+                                                <span className={`px-2 py-0.5 rounded-md border font-medium ${m.isPaid ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                                        : m.serverStatus === 'completed' ? 'bg-purple-50 text-purple-700 border-purple-100'
+                                                            : m.serverStatus === 'in-progress' ? 'bg-amber-50 text-amber-700 border-amber-100'
+                                                                : 'bg-gray-50 text-gray-600 border-gray-100'
+                                                    }`}>
                                                     {m.isPaid ? '✅ Done + Paid'
-                                                     : m.serverStatus === 'completed' ? '🎯 Hoàn thành'
-                                                     : m.serverStatus === 'in-progress' ? '🔧 Đang làm'
-                                                     : '⏳ Đang chờ'}
+                                                        : m.serverStatus === 'completed' ? '🎯 Hoàn thành'
+                                                            : m.serverStatus === 'in-progress' ? '🔧 Đang làm'
+                                                                : '⏳ Đang chờ'}
                                                 </span>
                                                 <button
                                                     onClick={() => handleRemoveMapping(m.keyword)}
@@ -568,19 +567,18 @@ export default function TaskManagementPage() {
                                                 📅 {new Date(p.deadline).toLocaleDateString('vi-VN')}
                                             </span>
                                         )}
-                                        <span className={`px-2 py-0.5 rounded-md border font-medium ${
-                                            p.isPaid
+                                        <span className={`px-2 py-0.5 rounded-md border font-medium ${p.isPaid
                                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                                                 : p.status === 'completed'
                                                     ? 'bg-purple-50 text-purple-700 border-purple-100'
                                                     : p.status === 'in-progress'
                                                         ? 'bg-amber-50 text-amber-700 border-amber-100'
                                                         : 'bg-gray-50 text-gray-600 border-gray-100'
-                                        }`}>
+                                            }`}>
                                             {p.isPaid ? '✅ Done'
                                                 : p.status === 'completed' ? `🎯 ${p.statusLabel || 'Completed'}`
-                                                : p.status === 'in-progress' ? `🔧 ${p.statusLabel || 'In Progress'}`
-                                                : '⏳ Pending'}
+                                                    : p.status === 'in-progress' ? `🔧 ${p.statusLabel || 'In Progress'}`
+                                                        : '⏳ Pending'}
                                         </span>
                                     </div>
                                 ) : null)}
@@ -797,11 +795,10 @@ export default function TaskManagementPage() {
                                         <button
                                             key={item}
                                             onClick={() => setPage(item)}
-                                            className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${
-                                                item === safePage
+                                            className={`w-8 h-8 rounded-lg text-xs font-bold transition-colors ${item === safePage
                                                     ? 'bg-primary text-white shadow-sm'
                                                     : 'text-text-muted hover:text-primary hover:bg-white'
-                                            }`}
+                                                }`}
                                         >
                                             {item}
                                         </button>

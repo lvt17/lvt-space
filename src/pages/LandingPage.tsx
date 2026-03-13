@@ -14,8 +14,8 @@ const content = {
         nav: { features: 'Features', themes: 'Themes', cta: 'Get Started' },
         hero: {
             badge: 'All-in-One Workspace',
-            title: 'Where Productivity',
-            titleHighlight: 'Meets Aesthetics',
+            title: 'One place',
+            titleHighlight: 'For everything you do',
             subtitle: 'Manage tasks, track income, organize checklists, and visualize your workflow — all in one beautiful, theme-aware platform.',
             cta: 'Start Free',
             ctaSub: 'No credit card required',
@@ -73,8 +73,8 @@ const content = {
         nav: { features: 'Tính năng', themes: 'Giao diện', cta: 'Dùng thử' },
         hero: {
             badge: 'Workspace all-in-one cho dân chuyên',
-            title: 'Đẹp mà vẫn',
-            titleHighlight: 'Hiệu quả',
+            title: 'One place',
+            titleHighlight: 'For everything you do',
             subtitle: 'Quản lý task, ghi nhận thu nhập, tổ chức checklist và theo dõi tiến độ — gom hết vào một nền tảng duy nhất.',
             cta: 'Dùng thử miễn phí',
             ctaSub: 'Không cần thẻ tín dụng',
