@@ -358,7 +358,7 @@ export default function TaskManagementPage() {
                             type="date"
                             value={deadline}
                             onChange={(e) => setDeadline(e.target.value)}
-                            className="w-full bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary"
+                            className="w-full max-w-full box-border bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary"
                         />
                     </div>
                     <div className="md:col-span-2">

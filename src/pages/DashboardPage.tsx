@@ -42,8 +42,10 @@ export default function DashboardPage() {
             ) : (
                 <>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-5 mb-6 md:mb-8">
-                        {cards.map((stat) => (
-                            <StatCard key={stat.title} {...stat} />
+                        {cards.map((stat, i) => (
+                            <div key={stat.title} className={i < 2 ? 'col-span-2 md:col-span-1' : ''}>
+                                <StatCard {...stat} />
+                            </div>
                         ))}
                     </div>
 

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
     FiLayout, FiCheckSquare, FiDollarSign, FiGrid,
     FiCalendar, FiSettings, FiMoon, FiSun, FiMonitor,
-    FiArrowRight, FiShield, FiZap, FiGlobe, FiGithub,
+    FiArrowRight, FiShield, FiZap, FiGlobe, FiGithub, FiLinkedin, FiInstagram,
     FiChevronDown, FiStar, FiUsers, FiTrendingUp
 } from 'react-icons/fi'
 import SpaceLogo from '@/components/ui/SpaceLogo'
@@ -431,9 +431,17 @@ export default function LandingPage() {
                         </div>
                         <div className="flex items-center gap-6 text-sm text-white/30">
                             <span>{t.footer.madeBy} <a href="https://github.com/lvt17" target="_blank" rel="noopener noreferrer" className="text-white/50 hover:text-white transition-colors">{t.footer.author}</a></span>
-                            <a href="https://github.com/lvt17/lvt-space" target="_blank" rel="noopener noreferrer" className="text-white/40 hover:text-white transition-colors">
-                                <FiGithub className="text-lg" />
-                            </a>
+                            <div className="flex items-center gap-3">
+                                <a href="https://github.com/lvt17/lvt-space" target="_blank" rel="noopener noreferrer" className="text-white/40 hover:text-white transition-colors">
+                                    <FiGithub className="text-lg" />
+                                </a>
+                                <a href="https://linkedin.com/in/lvt17" target="_blank" rel="noopener noreferrer" className="text-white/40 hover:text-white transition-colors">
+                                    <FiLinkedin className="text-lg" />
+                                </a>
+                                <a href="https://www.instagram.com/l.vt17_/" target="_blank" rel="noopener noreferrer" className="text-white/40 hover:text-white transition-colors">
+                                    <FiInstagram className="text-lg" />
+                                </a>
+                            </div>
                         </div>
                     </div>
                     <div className="text-center mt-6 text-xs text-white/15">
