@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+
+# Agent/AI files
+.agent/
+.gemini/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Stitch
+stitch-screens/
+
+# Database
+db.txt
+
+# Server (not needed for Tailwind scanning)
+server/
+.vercel
