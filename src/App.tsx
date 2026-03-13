@@ -6,6 +6,7 @@ import AppLayout from './components/layout/AppLayout'
 
 /* ─── Lazy-loaded pages (route-level code splitting) ─── */
 const LoginPage = lazy(() => import('./pages/LoginPage'))
+const LandingPage = lazy(() => import('./pages/LandingPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const TaskManagementPage = lazy(() => import('./pages/TaskManagementPage'))
 const DailyChecklistPage = lazy(() => import('./pages/DailyChecklistPage'))
@@ -56,10 +57,10 @@ export default function App() {
             <AuthProvider>
                 <Suspense fallback={<PageLoader />}>
                 <Routes>
+                    <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
                     <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
                     <Route path="/reset-password" element={<ResetPasswordPage />} />
                     <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                        <Route path="/" element={<Navigate to="/dashboard" replace />} />
                         <Route path="/dashboard" element={<DashboardPage />} />
                         <Route path="/tasks" element={<TaskManagementPage />} />
                         <Route path="/today" element={<DailyChecklistPage />} />
