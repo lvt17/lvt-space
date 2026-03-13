@@ -189,7 +189,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     // Apply theme whenever it changes
     useEffect(() => {
-        console.log('[Theme] useEffect → resolvedDark:', resolvedDark, 'mode:', mode, 'systemDark:', systemDark)
         applyTheme(resolvedDark, paletteDef)
     }, [resolvedDark, paletteDef])
 
@@ -198,7 +197,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         saveStored({ mode: m, palette })
         // Force immediate apply (don't wait for useEffect)
         const newResolvedDark = m === 'dark' || (m === 'system' && systemDark)
-        console.log('[Theme] setMode →', m, 'newResolvedDark:', newResolvedDark)
         applyTheme(newResolvedDark, paletteDef)
     }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import Header from '@/components/layout/Header'
 import { taskApi, type TaskRow } from '@/services/api'
 import { parseCurrency, formatVND } from '@/utils/currency'
@@ -97,13 +97,13 @@ export default function TaskManagementPage() {
     // Reset page when search/filter changes
     useEffect(() => { setPage(1) }, [search, statusFilter])
 
-    const handleAddTask = async () => {
+    const handleAddTask = useCallback(async () => {
         if (!name.trim() || submitting) return
         setSubmitting(true)
         try {
             const price = parseCurrency(priceInput)
             const task = await taskApi.create({ name: name.trim(), deadline: deadline || undefined, price })
-            setTasks([task, ...tasks])
+            setTasks(prev => [task, ...prev])
             setName('')
             setDeadline(new Date().toISOString().slice(0, 10))
             setPriceInput('')
@@ -112,40 +112,46 @@ export default function TaskManagementPage() {
         } finally {
             setSubmitting(false)
         }
-    }
+    }, [name, deadline, priceInput, submitting])
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = useCallback(async (id: string) => {
         await taskApi.remove(id)
-        setTasks(tasks.filter((t) => t.id !== id))
-    }
+        setTasks(prev => prev.filter(t => t.id !== id))
+    }, [])
 
-    const handleTogglePaid = async (id: string) => {
-        const task = tasks.find(t => t.id === id)
-        const willBePaid = !task?.is_paid
+    const handleTogglePaid = useCallback(async (id: string) => {
+        setTasks(prev => {
+            const task = prev.find(t => t.id === id)
+            if (!task) return prev
+            return prev // optimistic: actual update happens async
+        })
+        // Get current task state for logic
+        let currentTask: TaskRow | undefined
+        setTasks(prev => { currentTask = prev.find(t => t.id === id); return prev })
+        const willBePaid = !currentTask?.is_paid
         const updated = await taskApi.togglePaid(id)
-        // Auto-set status: paid → 'paid', unpaid → 'completed'
         if (willBePaid && updated.status !== 'paid') {
             const u2 = await taskApi.update(id, { status: 'paid' })
-            setTasks(tasks.map(t => t.id === id ? u2 : t))
+            setTasks(prev => prev.map(t => t.id === id ? u2 : t))
         } else if (!willBePaid && updated.status === 'paid') {
             const u2 = await taskApi.update(id, { status: 'completed' })
-            setTasks(tasks.map(t => t.id === id ? u2 : t))
+            setTasks(prev => prev.map(t => t.id === id ? u2 : t))
         } else {
-            setTasks(tasks.map(t => t.id === id ? updated : t))
+            setTasks(prev => prev.map(t => t.id === id ? updated : t))
         }
-    }
+    }, [])
 
-    const handleStatusChange = async (id: string, newStatus: string) => {
-        const task = tasks.find(t => t.id === id)
+    const handleStatusChange = useCallback(async (id: string, newStatus: string) => {
+        let currentTask: TaskRow | undefined
+        setTasks(prev => { currentTask = prev.find(t => t.id === id); return prev })
         let updated = await taskApi.update(id, { status: newStatus })
-        // Reverse sync: status → paid ↔ is_paid checkbox
-        if (newStatus === 'paid' && !task?.is_paid) {
-            updated = await taskApi.togglePaid(id) // sets is_paid = true
-        } else if (newStatus !== 'paid' && task?.is_paid) {
-            updated = await taskApi.togglePaid(id) // sets is_paid = false
+        if (newStatus === 'paid' && !currentTask?.is_paid) {
+            updated = await taskApi.togglePaid(id)
+        } else if (newStatus !== 'paid' && currentTask?.is_paid) {
+            updated = await taskApi.togglePaid(id)
         }
-        setTasks(tasks.map(t => t.id === id ? updated : t))
-    }
+        setTasks(prev => prev.map(t => t.id === id ? updated : t))
+    }, [])
 
     /* ─── Edit Task ─── */
     const [editingTask, setEditingTask] = useState<TaskRow | null>(null)
@@ -161,7 +167,7 @@ export default function TaskManagementPage() {
         setEditPrice(task.price ? String(task.price) : '')
     }
 
-    const handleEditSave = async () => {
+    const handleEditSave = useCallback(async () => {
         if (!editingTask || !editName.trim() || editSaving) return
         setEditSaving(true)
         try {
@@ -170,14 +176,14 @@ export default function TaskManagementPage() {
                 deadline: editDeadline || undefined,
                 price: parseCurrency(editPrice),
             })
-            setTasks(tasks.map(t => t.id === editingTask.id ? updated : t))
+            setTasks(prev => prev.map(t => t.id === editingTask.id ? updated : t))
             setEditingTask(null)
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : 'Lỗi cập nhật')
         } finally {
             setEditSaving(false)
         }
-    }
+    }, [editingTask, editName, editDeadline, editPrice, editSaving])
 
     /* ─── Smart Raw Input Parser ─── */
     const [rawInput, setRawInput] = useState('')

@@ -23,16 +23,15 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     }
 
     const token = authHeader.slice(7)
+    const secret = process.env.SUPABASE_JWT_SECRET
+
+    if (!secret) {
+        res.status(500).json({ error: 'Server misconfigured: missing JWT secret' })
+        return
+    }
 
     try {
-        const secret = process.env.SUPABASE_JWT_SECRET
-        let payload: { sub?: string }
-
-        if (secret) {
-            payload = jwt.verify(token, secret) as { sub?: string }
-        } else {
-            payload = jwt.decode(token) as { sub?: string }
-        }
+        const payload = jwt.verify(token, secret) as { sub?: string }
 
         if (!payload?.sub) {
             res.status(401).json({ error: 'Invalid token: no user ID' })

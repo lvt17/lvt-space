@@ -1,15 +1,26 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import AppLayout from './components/layout/AppLayout'
-import LoginPage from './pages/LoginPage'
-import DashboardPage from './pages/DashboardPage'
-import TaskManagementPage from './pages/TaskManagementPage'
-import DailyChecklistPage from './pages/DailyChecklistPage'
-import IncomeReceivedPage from './pages/IncomeReceivedPage'
-import ChecklistPage from './pages/ChecklistPage'
-import ResetPasswordPage from './pages/ResetPasswordPage'
-import SettingsPage from './pages/SettingsPage'
+
+/* ─── Lazy-loaded pages (route-level code splitting) ─── */
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const TaskManagementPage = lazy(() => import('./pages/TaskManagementPage'))
+const DailyChecklistPage = lazy(() => import('./pages/DailyChecklistPage'))
+const IncomeReceivedPage = lazy(() => import('./pages/IncomeReceivedPage'))
+const ChecklistPage = lazy(() => import('./pages/ChecklistPage'))
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+
+function PageLoader() {
+    return (
+        <div className="flex items-center justify-center py-32">
+            <div className="w-8 h-8 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
+        </div>
+    )
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const { user, loading, isRecovery } = useAuth()
@@ -43,6 +54,7 @@ export default function App() {
         <ThemeProvider>
         <BrowserRouter>
             <AuthProvider>
+                <Suspense fallback={<PageLoader />}>
                 <Routes>
                     <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
                     <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -56,6 +68,7 @@ export default function App() {
                         <Route path="/settings" element={<SettingsPage />} />
                     </Route>
                 </Routes>
+                </Suspense>
             </AuthProvider>
         </BrowserRouter>
         </ThemeProvider>

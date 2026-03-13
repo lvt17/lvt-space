@@ -10,6 +10,19 @@ export default defineConfig({
             '@': path.resolve(__dirname, './src'),
         },
     },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    'vendor-react': ['react', 'react-dom'],
+                    'vendor-router': ['react-router-dom'],
+                    'vendor-charts': ['recharts'],
+                    'vendor-supabase': ['@supabase/supabase-js'],
+                    'vendor-icons': ['react-icons'],
+                },
+            },
+        },
+    },
     server: {
         proxy: {
             '/api': 'http://localhost:3001',

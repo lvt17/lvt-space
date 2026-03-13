@@ -14,7 +14,14 @@ dotenv.config()
 const app = express()
 const PORT = parseInt(process.env.PORT || '3001')
 
-app.use(cors())
+app.use(cors({
+    origin: [
+        'https://lvtspace.me',
+        'http://localhost:5173',
+        'http://localhost:3000',
+    ],
+    credentials: true,
+}))
 app.use(express.json())
 
 // API routes
