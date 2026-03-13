@@ -1,0 +1,97 @@
+import { Router } from 'express'
+import pool from '../db.js'
+
+const router = Router()
+
+// GET dashboard stats (filtered by user)
+router.get('/stats', async (req, res) => {
+  const userId = req.userId
+
+  const [taskStats, incomeStats, monthlyTrend] = await Promise.all([
+    pool.query(`
+      SELECT
+        COUNT(*) AS total_tasks,
+        COUNT(*) FILTER (WHERE status = 'completed') AS completed_tasks,
+        COUNT(*) FILTER (WHERE status IN ('pending', 'processing', 'in-progress')) AS active_tasks,
+        COALESCE(SUM(price) FILTER (WHERE is_paid = false), 0) AS unpaid_total,
+        COALESCE(SUM(price) FILTER (WHERE is_paid = true), 0) AS paid_total,
+        COALESCE(SUM(price) FILTER (WHERE is_paid = true AND date_trunc('month', COALESCE(updated_at, created_at)) = date_trunc('month', CURRENT_DATE)), 0) AS paid_this_month
+      FROM tasks WHERE user_id = $1
+    `, [userId]),
+    pool.query(`
+      SELECT COALESCE(SUM(amount), 0) AS monthly_income
+      FROM income_records
+      WHERE user_id = $1 AND date_trunc('month', received_date) = date_trunc('month', CURRENT_DATE)
+    `, [userId]),
+    pool.query(`
+      SELECT
+        to_char(date_trunc('month', t.month), 'Mon') AS name,
+        COALESCE(SUM(t.price), 0) AS income
+      FROM (
+        SELECT date_trunc('month', COALESCE(updated_at, created_at)) AS month, price
+        FROM tasks WHERE is_paid = true AND user_id = $1
+        UNION ALL
+        SELECT date_trunc('month', received_date) AS month, amount AS price
+        FROM income_records WHERE user_id = $1
+      ) t
+      WHERE t.month >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
+      GROUP BY date_trunc('month', t.month)
+      ORDER BY date_trunc('month', t.month) ASC
+    `, [userId]),
+  ])
+
+  const ts = taskStats.rows[0]
+  const totalTasks = parseInt(ts.total_tasks) || 0
+  const completedTasks = parseInt(ts.completed_tasks) || 0
+  const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+
+  const monthlyIncome = parseInt(incomeStats.rows[0].monthly_income) || 0
+  const paidThisMonth = parseInt(ts.paid_this_month) || 0
+
+  res.json({
+    totalTasks,
+    completedTasks,
+    activeTasks: parseInt(ts.active_tasks) || 0,
+    monthlyIncome: monthlyIncome + paidThisMonth,
+    unpaidTotal: parseInt(ts.unpaid_total) || 0,
+    completionRate,
+    monthlyTrend: monthlyTrend.rows.map(r => ({
+      name: r.name,
+      income: parseInt(r.income),
+    })),
+  })
+})
+
+// GET monthly performance (last 6 months, filtered by user)
+router.get('/performance', async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT
+      to_char(date_trunc('month', created_at), 'TMTháng MM') AS month,
+      COUNT(*) AS total,
+      COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+      COALESCE(SUM(price), 0) AS revenue,
+      COUNT(*) FILTER (WHERE is_paid = true) AS paid_count,
+      COUNT(*) FILTER (WHERE is_paid = false) AS unpaid_count
+    FROM tasks
+    WHERE user_id = $1 AND created_at >= CURRENT_DATE - INTERVAL '6 months'
+    GROUP BY date_trunc('month', created_at)
+    ORDER BY date_trunc('month', created_at) DESC
+    LIMIT 6
+  `, [req.userId])
+
+  res.json(rows.map(r => {
+    const total = parseInt(r.total) || 1
+    const completed = parseInt(r.completed) || 0
+    const rate = Math.round((completed / total) * 100)
+    return {
+      month: r.month,
+      revenue: parseInt(r.revenue),
+      completionRate: rate,
+      paidCount: parseInt(r.paid_count) || 0,
+      unpaidCount: parseInt(r.unpaid_count) || 0,
+      status: rate >= 50 ? 'on-target' : 'below-average',
+    }
+  }))
+})
+
+export default router
