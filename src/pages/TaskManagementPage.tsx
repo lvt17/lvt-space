@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Header from '@/components/layout/Header'
 import { taskApi, type TaskRow } from '@/services/api'
 import { parseCurrency, formatVND } from '@/utils/currency'
-import { FiSearch, FiPlus, FiTrash2, FiRefreshCw, FiChevronLeft, FiChevronRight, FiZap, FiX, FiTerminal, FiEdit2, FiCheck, FiSettings, FiChevronDown } from 'react-icons/fi'
+import { FiSearch, FiPlus, FiTrash2, FiRefreshCw, FiChevronLeft, FiChevronRight, FiZap, FiX, FiTerminal, FiEdit2, FiCheck, FiSettings, FiChevronDown, FiHelpCircle } from 'react-icons/fi'
 
 /* ─── Server Status Options ─── */
 const SERVER_STATUSES = [
@@ -182,6 +182,7 @@ export default function TaskManagementPage() {
     /* ─── Smart Raw Input Parser ─── */
     const [rawInput, setRawInput] = useState('')
     const [showRawModal, setShowRawModal] = useState(false)
+    const [showRawHelp, setShowRawHelp] = useState(false)
     const [statusMappings, setStatusMappings] = useState<StatusMapping[]>(loadMappings)
     const [showMappingConfig, setShowMappingConfig] = useState(false)
     const [newKeyword, setNewKeyword] = useState('')
@@ -386,23 +387,78 @@ export default function TaskManagementPage() {
             {showRawModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowRawModal(false)} />
-                    <div className="relative glass-card rounded-3xl p-6 sm:p-8 w-full max-w-lg shadow-2xl max-h-[85vh] overflow-y-auto">
+                    <div className="relative glass-card rounded-3xl p-6 sm:p-8 w-full max-w-2xl shadow-2xl max-h-[85vh] overflow-y-auto">
                         {/* Header */}
                         <div className="flex items-center justify-between mb-5">
                             <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 bg-primary rounded-full flex items-center justify-center">
-                                    <FiZap className="text-sm text-white" />
+                                <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+                                    <FiZap className="text-base text-white" />
                                 </div>
-                                <h3 className="font-bold text-lg text-text-primary">Raw Input</h3>
-                                <span className="text-[0.6rem] text-text-muted bg-surface px-2 py-0.5 rounded-full border border-border">Smart Parse</span>
+                                <h3 className="font-bold text-xl text-text-primary">Raw Input</h3>
+                                <span className="text-[0.65rem] text-text-muted bg-surface px-2.5 py-1 rounded-full border border-border">Smart Parse</span>
                             </div>
-                            <button
-                                onClick={() => setShowRawModal(false)}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface transition-colors"
-                            >
-                                <FiX className="text-lg" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={() => setShowRawHelp(!showRawHelp)}
+                                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${showRawHelp ? 'bg-primary text-white' : 'text-text-muted hover:text-primary hover:bg-primary/10'}`}
+                                    title="Hướng dẫn sử dụng"
+                                >
+                                    <FiHelpCircle className="text-lg" />
+                                </button>
+                                <button
+                                    onClick={() => setShowRawModal(false)}
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface transition-colors cursor-pointer"
+                                >
+                                    <FiX className="text-lg" />
+                                </button>
+                            </div>
                         </div>
+
+                        {/* Help Guide */}
+                        {showRawHelp && (
+                            <div className="mb-5 bg-primary/5 border border-primary/15 rounded-2xl p-5 space-y-4">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <FiHelpCircle className="text-primary text-base" />
+                                    <h4 className="font-bold text-sm text-text-primary">Hướng dẫn sử dụng Raw Input</h4>
+                                </div>
+                                <div className="space-y-3 text-xs text-text-secondary">
+                                    <div>
+                                        <p className="font-semibold text-text-primary mb-1">📝 Cú pháp cơ bản:</p>
+                                        <code className="block bg-surface/80 border border-border rounded-lg px-3 py-2 font-mono text-text-muted">tên công việc &nbsp; giá &nbsp; ngày &nbsp; =&gt; trạng thái</code>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div>
+                                            <p className="font-semibold text-text-primary mb-1">💰 Định dạng giá:</p>
+                                            <ul className="space-y-0.5 text-text-muted">
+                                                <li><code className="bg-surface px-1.5 py-0.5 rounded">500k</code> → 500.000đ</li>
+                                                <li><code className="bg-surface px-1.5 py-0.5 rounded">1m5</code> → 1.500.000đ</li>
+                                                <li><code className="bg-surface px-1.5 py-0.5 rounded">2tr</code> → 2.000.000đ</li>
+                                                <li><code className="bg-surface px-1.5 py-0.5 rounded">300000</code> → 300.000đ</li>
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <p className="font-semibold text-text-primary mb-1">📅 Định dạng ngày:</p>
+                                            <ul className="space-y-0.5 text-text-muted">
+                                                <li><code className="bg-surface px-1.5 py-0.5 rounded">15/3</code> → 15 tháng 3</li>
+                                                <li><code className="bg-surface px-1.5 py-0.5 rounded">20/03/2026</code> → 20/03/2026</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold text-text-primary mb-1">🏷️ Trạng thái (sau dấu =&gt;):</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100">done → Hoàn thành + Đã TT</span>
+                                            <span className="bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-100">started → Đang làm</span>
+                                            <span className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded border border-gray-100">Không có → Đang chờ</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="font-semibold text-text-primary mb-1">✨ Ví dụ:</p>
+                                        <code className="block bg-surface/80 border border-border rounded-lg px-3 py-2 font-mono text-text-muted whitespace-pre">Setup server 2m 15/3 =&gt; done{"\n"}Thiết kế logo 500k 20/3 =&gt; started{"\n"}Viết tài liệu 300k</code>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Status Mapping Config */}
                         <div className="mb-4 border border-border rounded-xl overflow-hidden">
@@ -482,8 +538,8 @@ export default function TaskManagementPage() {
                             value={rawInput}
                             onChange={e => setRawInput(e.target.value)}
                             placeholder={`vd: example 1 500k 15/3 => done\n    example 2 1m2 20/3 => started`}
-                            rows={5}
-                            className="w-full bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary placeholder:text-text-muted font-mono resize-none"
+                            rows={8}
+                            className="w-full bg-surface border border-border rounded-xl px-4 py-3.5 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary placeholder:text-text-muted font-mono resize-none"
                             autoFocus
                         />
 

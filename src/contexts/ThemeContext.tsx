@@ -63,8 +63,8 @@ function generateLightSurfaces(palette: PaletteDef) {
     const rgb = hexToRgb(palette.primary)
     return {
         surface: '#ffffff',
-        surfaceSecondary: palette.lightest,
-        surfaceHover: palette.lighter,
+        surfaceSecondary: `rgba(${rgb}, 0.04)`,
+        surfaceHover: `rgba(${rgb}, 0.06)`,
         sidebarBg: '#ffffff',
         border: `rgba(${rgb}, 0.12)`,
         borderLight: `rgba(${rgb}, 0.07)`,

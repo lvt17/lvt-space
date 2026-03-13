@@ -131,7 +131,15 @@ body {
   background: rgba(var(--theme-primary-rgb), 0.35);
 }
 
-/* ─── Dark mode form & table overrides ─── */
+/* ─── Form & checkbox styling ─── */
+input[type="checkbox"] {
+  accent-color: var(--color-primary);
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
 .dark input,
 .dark select,
 .dark textarea {
