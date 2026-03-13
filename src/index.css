@@ -1,0 +1,241 @@
+@import "tailwindcss";
+@source "../src";
+
+@theme {
+  /* Palette defaults (overridden by ThemeContext at runtime) */
+  --color-primary: #C264FF;
+  --color-primary-mid: #CC7DFF;
+  --color-primary-soft: #D697FF;
+  --color-primary-light: #E0B0FF;
+  --color-primary-lighter: #EACAFF;
+  --color-primary-lightest: #F4E3FF;
+
+  /* Surface defaults (overridden by ThemeContext at runtime) */
+  --color-surface: #ffffff;
+  --color-surface-secondary: #F8F5FF;
+  --color-surface-hover: #F0EAFF;
+  --color-sidebar-bg: #FAF7FF;
+  --color-sidebar-active: rgba(194, 100, 255, 0.12);
+  --color-border: #E8DFF5;
+  --color-border-light: #F0EBF7;
+  --color-text-primary: #1A0A2E;
+  --color-text-secondary: #6B5B7B;
+  --color-text-muted: #9B8DAE;
+  --font-display: "Plus Jakarta Sans", sans-serif;
+}
+
+:root {
+  --theme-primary-rgb: 194, 100, 255;
+}
+
+body {
+  font-family: var(--font-display);
+  background: linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 30%, #EDE5FF 60%, #F8F5FF 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  margin: 0;
+  color: var(--color-text-primary);
+  transition: background 0.4s ease, color 0.3s ease;
+}
+
+/* ─── Glass card ─── */
+.glass-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(var(--theme-primary-rgb), 0.04), 0 4px 16px rgba(var(--theme-primary-rgb), 0.03);
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  border-color: var(--color-primary-lighter);
+  box-shadow: 0 4px 20px rgba(var(--theme-primary-rgb), 0.08), 0 1px 3px rgba(var(--theme-primary-rgb), 0.06);
+}
+
+/* Dark mode glass — elevated surfaces with subtle glow */
+.dark .glass-card {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(12px);
+}
+.dark .glass-card:hover {
+  border-color: rgba(var(--theme-primary-rgb), 0.3);
+  box-shadow: 0 4px 20px rgba(var(--theme-primary-rgb), 0.12), 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Sidebar ─── */
+.glass-sidebar {
+  background: var(--color-sidebar-bg);
+  border-right: 1px solid var(--color-border);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+.dark .glass-sidebar {
+  background: var(--color-sidebar-bg);
+  border-right: 1px solid var(--color-border);
+}
+
+/* Active sidebar tab */
+.sidebar-active {
+  background: var(--color-sidebar-active);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* ─── Decorative dots overlay ─── */
+.stars-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image:
+    radial-gradient(circle, rgba(var(--theme-primary-rgb), 0.06) 1px, transparent 1px),
+    radial-gradient(circle, rgba(var(--theme-primary-rgb), 0.04) 1px, transparent 1px);
+  background-size: 40px 40px, 20px 20px;
+  background-position: 0 0, 10px 10px;
+  z-index: -1;
+  opacity: 0.5;
+  pointer-events: none;
+}
+.dark .stars-overlay {
+  opacity: 0.15;
+}
+
+/* ─── Custom scrollbar ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(var(--theme-primary-rgb), 0.2);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--theme-primary-rgb), 0.35);
+}
+
+/* ─── Dark mode form & table overrides ─── */
+.dark input,
+.dark select,
+.dark textarea {
+  color-scheme: dark;
+}
+
+/* Dark mode alert/msg boxes */
+.dark .bg-green-50 { background: rgba(16, 185, 129, 0.1) !important; }
+.dark .border-green-200 { border-color: rgba(16, 185, 129, 0.25) !important; }
+.dark .text-green-600 { color: #34d399 !important; }
+.dark .bg-red-50 { background: rgba(244, 63, 94, 0.1) !important; }
+.dark .border-red-200 { border-color: rgba(244, 63, 94, 0.25) !important; }
+.dark .text-red-600 { color: #fb7185 !important; }
+.dark .text-red-500 { color: #fb7185 !important; }
+
+/* Dark mode table headers */
+.dark th {
+  color: var(--color-text-muted) !important;
+}
+.dark td {
+  border-color: #313244 !important;
+}
+
+/* Dark mode price text */
+.dark .text-primary {
+  color: var(--color-primary) !important;
+}
+
+/* ─── Board canvas dark mode ─── */
+/* Dark canvas background */
+.dark [data-canvas-wrapper] {
+  background-color: #11111b !important;
+}
+
+/* Dark mode board widgets — override Tailwind bg-* AND inline style backgrounds */
+.dark [data-sticky-note] {
+  background-color: rgba(30, 30, 46, 0.95) !important;
+  background-image: none !important;
+  border-color: rgba(var(--theme-primary-rgb), 0.2) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(var(--theme-primary-rgb), 0.08) !important;
+  color: #cdd6f4;
+}
+
+/* Dark board widget headers — first direct child div */
+.dark [data-sticky-note] > div:first-child {
+  background-color: rgba(var(--theme-primary-rgb), 0.1) !important;
+  background-image: none !important;
+}
+
+/* Dark board widget text */
+.dark [data-sticky-note] h3 {
+  color: #cdd6f4 !important;
+}
+.dark [data-sticky-note] p {
+  color: #a6adc8 !important;
+}
+.dark [data-sticky-note] span {
+  color: #a6adc8;
+}
+
+/* Dark board widget list items — bg-white with opacity */
+.dark [data-sticky-note] [class*="bg-white"] {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+.dark [data-sticky-note] [class*="bg-white"]:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Keep status badges colorful in dark mode */
+.dark [data-sticky-note] .bg-green-100 { background-color: rgba(16, 185, 129, 0.15) !important; }
+.dark [data-sticky-note] .text-green-600 { color: #34d399 !important; }
+.dark [data-sticky-note] .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.15) !important; }
+.dark [data-sticky-note] .text-emerald-600 { color: #34d399 !important; }
+.dark [data-sticky-note] .bg-amber-100 { background-color: rgba(245, 158, 11, 0.15) !important; }
+.dark [data-sticky-note] .text-amber-600 { color: #fbbf24 !important; }
+.dark [data-sticky-note] .bg-red-100 { background-color: rgba(244, 63, 94, 0.15) !important; }
+.dark [data-sticky-note] .text-red-600 { color: #fb7185 !important; }
+.dark [data-sticky-note] .bg-blue-100 { background-color: rgba(59, 130, 246, 0.15) !important; }
+.dark [data-sticky-note] .text-blue-600 { color: #60a5fa !important; }
+.dark [data-sticky-note] .bg-purple-100 { background-color: rgba(168, 85, 247, 0.15) !important; }
+.dark [data-sticky-note] .text-purple-600 { color: #c084fc !important; }
+.dark [data-sticky-note] .bg-gray-100 { background-color: rgba(255, 255, 255, 0.08) !important; }
+.dark [data-sticky-note] .text-gray-500 { color: #a6adc8 !important; }
+
+/* Dark mode progress bar track */
+.dark [data-sticky-note] .bg-rose-100 {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Dark text fixes for specific elements */
+.dark .text-rose-900 { color: #fda4af !important; }
+.dark .text-rose-300 { color: rgba(253, 164, 175, 0.5) !important; }
+.dark .text-rose-400 { color: #fb7185 !important; }
+.dark .text-rose-500 { color: #f43f5e !important; }
+.dark .text-rose-600 { color: #fb7185 !important; }
+.dark .text-blue-900 { color: #93c5fd !important; }
+.dark .text-blue-500 { color: #60a5fa !important; }
+.dark .text-emerald-900 { color: #6ee7b7 !important; }
+.dark .text-emerald-600 { color: #34d399 !important; }
+
+/* Dark mode time badges */
+.dark .bg-rose-50 { background-color: rgba(244, 63, 94, 0.1) !important; }
+.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.1) !important; }
+.dark .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.1) !important; }
+
+/* ─── Sidebar dark mode active item ─── */
+.dark .sidebar-active {
+  background-color: rgba(var(--theme-primary-rgb), 0.12);
+  border-color: rgba(var(--theme-primary-rgb), 0.2);
+}
+
+/* ─── Income page dark mode ─── */
+.dark .bg-primary\/5 { background-color: rgba(var(--theme-primary-rgb), 0.05) !important; }
+.dark .bg-primary\/10 { background-color: rgba(var(--theme-primary-rgb), 0.08) !important; }
+
+/* ─── Zoom controls dark mode ─── */
+.dark [class*="bg-white/90"] {
+  background-color: rgba(30, 30, 46, 0.9) !important;
+}
+
+/* ─── Catch-all: Any bg-white element in dark mode ─── */
+.dark [class*="bg-white"] {
+  background-color: rgba(30, 30, 46, 0.85) !important;
+}
