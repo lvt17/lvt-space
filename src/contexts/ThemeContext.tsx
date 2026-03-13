@@ -63,15 +63,15 @@ function generateLightSurfaces(palette: PaletteDef) {
     const rgb = hexToRgb(palette.primary)
     return {
         surface: '#ffffff',
-        surfaceSecondary: `rgba(${rgb}, 0.03)`,
-        surfaceHover: `rgba(${rgb}, 0.06)`,
-        sidebarBg: `rgba(${rgb}, 0.02)`,
+        surfaceSecondary: palette.lightest,
+        surfaceHover: palette.lighter,
+        sidebarBg: '#ffffff',
         border: `rgba(${rgb}, 0.12)`,
         borderLight: `rgba(${rgb}, 0.07)`,
         textPrimary: '#1a1a2e',
         textSecondary: '#5a5a7a',
         textMuted: '#8a8aae',
-        bodyGradient: `linear-gradient(135deg, rgba(${rgb}, 0.03) 0%, rgba(${rgb}, 0.06) 30%, rgba(${rgb}, 0.04) 60%, rgba(${rgb}, 0.02) 100%)`,
+        bodyGradient: `linear-gradient(135deg, ${palette.lightest} 0%, #ffffff 50%, ${palette.lightest} 100%)`,
     }
 }
 
@@ -88,7 +88,7 @@ function loadStored(): StoredTheme {
         const raw = localStorage.getItem(STORAGE_KEY)
         if (raw) return JSON.parse(raw)
     } catch { /* noop */ }
-    return { mode: 'light', palette: 'purple' }
+    return { mode: 'system', palette: 'purple' }
 }
 
 function saveStored(s: StoredTheme) {
@@ -147,9 +147,8 @@ function applyTheme(dark: boolean, palette: PaletteDef) {
     root.style.setProperty('--color-text-secondary', surfaces.textSecondary)
     root.style.setProperty('--color-text-muted', surfaces.textMuted)
 
-    // Body background
-    document.body.style.background = surfaces.bodyGradient
-    document.body.style.backgroundAttachment = 'fixed'
+    // Body background — use CSS variable to avoid specificity issues
+    root.style.setProperty('--body-bg', surfaces.bodyGradient)
 
     // Dark class for components that need it
     if (dark) {
@@ -190,12 +189,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     // Apply theme whenever it changes
     useEffect(() => {
+        console.log('[Theme] useEffect → resolvedDark:', resolvedDark, 'mode:', mode, 'systemDark:', systemDark)
         applyTheme(resolvedDark, paletteDef)
     }, [resolvedDark, paletteDef])
 
     const setMode = (m: ThemeMode) => {
         setModeState(m)
         saveStored({ mode: m, palette })
+        // Force immediate apply (don't wait for useEffect)
+        const newResolvedDark = m === 'dark' || (m === 'system' && systemDark)
+        console.log('[Theme] setMode →', m, 'newResolvedDark:', newResolvedDark)
+        applyTheme(newResolvedDark, paletteDef)
     }
 
     const setPalette = (p: PaletteId) => {

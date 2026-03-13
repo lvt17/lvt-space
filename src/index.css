@@ -1,16 +1,15 @@
 @import "tailwindcss";
 @source "../src";
 
+@variant dark (&:where(.dark, .dark *));
+
 @theme {
-  /* Palette defaults (overridden by ThemeContext at runtime) */
   --color-primary: #C264FF;
   --color-primary-mid: #CC7DFF;
   --color-primary-soft: #D697FF;
   --color-primary-light: #E0B0FF;
   --color-primary-lighter: #EACAFF;
   --color-primary-lightest: #F4E3FF;
-
-  /* Surface defaults (overridden by ThemeContext at runtime) */
   --color-surface: #ffffff;
   --color-surface-secondary: #F8F5FF;
   --color-surface-hover: #F0EAFF;
@@ -26,11 +25,29 @@
 
 :root {
   --theme-primary-rgb: 194, 100, 255;
+  --body-bg: linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 30%, #EDE5FF 60%, #F8F5FF 100%);
+  /* Override all theme colors here so JS setProperty always wins */
+  --color-primary: #C264FF;
+  --color-primary-mid: #CC7DFF;
+  --color-primary-soft: #D697FF;
+  --color-primary-light: #E0B0FF;
+  --color-primary-lighter: #EACAFF;
+  --color-primary-lightest: #F4E3FF;
+  --color-surface: #ffffff;
+  --color-surface-secondary: #F8F5FF;
+  --color-surface-hover: #F0EAFF;
+  --color-sidebar-bg: #FAF7FF;
+  --color-sidebar-active: rgba(194, 100, 255, 0.12);
+  --color-border: #E8DFF5;
+  --color-border-light: #F0EBF7;
+  --color-text-primary: #1A0A2E;
+  --color-text-secondary: #6B5B7B;
+  --color-text-muted: #9B8DAE;
 }
 
 body {
   font-family: var(--font-display);
-  background: linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 30%, #EDE5FF 60%, #F8F5FF 100%);
+  background: var(--body-bg);
   background-attachment: fixed;
   min-height: 100vh;
   margin: 0;

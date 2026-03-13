@@ -661,9 +661,7 @@ export default function SettingsPage() {
                                         </div>
 
                                         <div className="text-center mt-6 pt-4 border-t border-border">
-                                            <p className="text-[0.65rem] text-text-muted">
-                                                Made with <span className="text-red-400">♥</span> in Vietnam · © 2026
-                                            </p>
+
                                         </div>
                                     </div>
                                 </div>
