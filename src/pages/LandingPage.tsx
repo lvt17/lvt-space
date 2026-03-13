@@ -122,7 +122,7 @@ const content = {
             button: 'Đăng ký miễn phí',
         },
         footer: {
-            tagline: 'Workspace đẹp, dùng sướng.',
+            tagline: 'Làm việc đẹp hơn mỗi ngày.',
             madeBy: 'Phát triển bởi',
             author: 'Liêu Vĩnh Toàn',
             rights: 'Đã đăng ký bản quyền.',
