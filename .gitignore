@@ -26,6 +26,4 @@ stitch-screens/
 # Database
 db.txt
 
-# Server (not needed for Tailwind scanning)
-server/
 .vercel
