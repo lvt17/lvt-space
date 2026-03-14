@@ -17,7 +17,8 @@ router.get('/stats', async (req, res) => {
         COUNT(*) FILTER (WHERE status IN ('pending', 'processing', 'in-progress')) AS active_tasks,
         COALESCE(SUM(price) FILTER (WHERE is_paid = false), 0) AS unpaid_total,
         COALESCE(SUM(price) FILTER (WHERE is_paid = true), 0) AS paid_total,
-        COALESCE(SUM(price) FILTER (WHERE is_paid = true AND date_trunc('month', (COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))), 0) AS paid_this_month
+        COALESCE(SUM(price) FILTER (WHERE is_paid = true AND date_trunc('month', (COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))), 0) AS paid_this_month,
+        COALESCE(SUM(price) FILTER (WHERE date_trunc('month', (created_at AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))), 0) AS all_tasks_this_month
       FROM tasks WHERE user_id = $1
     `, [userId]),
     pool.query(`
@@ -53,6 +54,7 @@ router.get('/stats', async (req, res) => {
 
   const monthlyIncome = parseInt(incomeStats.rows[0].monthly_income) || 0
   const paidThisMonth = parseInt(ts.paid_this_month) || 0
+  const allTasksThisMonth = parseInt(ts.all_tasks_this_month) || 0
 
   const paidTotal = parseInt(ts.paid_total) || 0
   const allIncomeTotal = parseInt(allIncomeStats.rows[0].total_all_income) || 0
@@ -62,6 +64,7 @@ router.get('/stats', async (req, res) => {
     completedTasks,
     activeTasks: parseInt(ts.active_tasks) || 0,
     monthlyIncome: monthlyIncome + paidThisMonth,
+    monthlyTotalIncome: allTasksThisMonth + monthlyIncome,
     unpaidTotal: parseInt(ts.unpaid_total) || 0,
     totalIncome: paidTotal + allIncomeTotal,
     completionRate,
