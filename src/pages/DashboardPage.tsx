@@ -21,7 +21,7 @@ export default function DashboardPage() {
 
     const cards: StatCardData[] = stats
         ? [
-            { title: 'Tổng thu nhập', value: formatVND(stats.monthlyIncome), icon: 'account_balance_wallet' },
+            { title: 'Đã nhận', value: formatVND(stats.monthlyIncome), icon: 'account_balance_wallet' },
             { title: 'Chưa thanh toán', value: formatVND(stats.unpaidTotal), icon: 'hourglass_top' },
             { title: 'Hoàn thành', value: `${stats.completionRate}%`, subtitle: `${stats.completedTasks}/${stats.totalTasks}`, icon: 'check_circle' },
             { title: 'Tổng công việc', value: String(stats.totalTasks), icon: 'assignment' },

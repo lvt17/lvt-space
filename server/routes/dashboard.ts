@@ -7,6 +7,8 @@ const router = Router()
 router.get('/stats', async (req, res) => {
   const userId = req.userId
 
+  const TZ = 'Asia/Ho_Chi_Minh'
+
   const [taskStats, incomeStats, monthlyTrend] = await Promise.all([
     pool.query(`
       SELECT
@@ -15,26 +17,26 @@ router.get('/stats', async (req, res) => {
         COUNT(*) FILTER (WHERE status IN ('pending', 'processing', 'in-progress')) AS active_tasks,
         COALESCE(SUM(price) FILTER (WHERE is_paid = false), 0) AS unpaid_total,
         COALESCE(SUM(price) FILTER (WHERE is_paid = true), 0) AS paid_total,
-        COALESCE(SUM(price) FILTER (WHERE is_paid = true AND date_trunc('month', COALESCE(updated_at, created_at)) = date_trunc('month', CURRENT_DATE)), 0) AS paid_this_month
+        COALESCE(SUM(price) FILTER (WHERE is_paid = true AND date_trunc('month', (COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))), 0) AS paid_this_month
       FROM tasks WHERE user_id = $1
     `, [userId]),
     pool.query(`
       SELECT COALESCE(SUM(amount), 0) AS monthly_income
       FROM income_records
-      WHERE user_id = $1 AND date_trunc('month', received_date) = date_trunc('month', CURRENT_DATE)
+      WHERE user_id = $1 AND date_trunc('month', received_date) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}')::date)
     `, [userId]),
     pool.query(`
       SELECT
         to_char(date_trunc('month', t.month), 'Mon') AS name,
         COALESCE(SUM(t.price), 0) AS income
       FROM (
-        SELECT date_trunc('month', COALESCE(updated_at, created_at)) AS month, price
+        SELECT date_trunc('month', (COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')) AS month, price
         FROM tasks WHERE is_paid = true AND user_id = $1
         UNION ALL
         SELECT date_trunc('month', received_date) AS month, amount AS price
-        FROM income_records WHERE user_id = $1
+        FROM income_records WHERE user_id = $1 AND received_date IS NOT NULL
       ) t
-      WHERE t.month >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
+      WHERE t.month >= date_trunc('month', (NOW() AT TIME ZONE '${TZ}')) - INTERVAL '11 months'
       GROUP BY date_trunc('month', t.month)
       ORDER BY date_trunc('month', t.month) ASC
     `, [userId]),

@@ -6,7 +6,10 @@ export default function StatCard({ title, value, icon, trend, subtitle }: StatCa
             <div className="flex justify-between items-start mb-3 sm:mb-4">
                 <div className="min-w-0 flex-1 mr-2">
                     <p className="text-text-muted text-xs sm:text-sm font-medium">{title}</p>
-                    <h3 className="text-xl sm:text-2xl font-bold mt-1 text-text-primary truncate">{value}</h3>
+                    <div className="flex items-baseline gap-2 mt-1">
+                        <h3 className="text-xl sm:text-2xl font-bold text-text-primary truncate">{value}</h3>
+                        {subtitle && <span className="text-sm font-semibold text-primary whitespace-nowrap">{subtitle}</span>}
+                    </div>
                 </div>
                 <div className="w-9 h-9 sm:w-10 sm:h-10 bg-primary-lightest rounded-xl flex items-center justify-center text-primary flex-shrink-0">
                     <span className="material-icons-round text-lg sm:text-2xl">{icon}</span>
@@ -20,7 +23,6 @@ export default function StatCard({ title, value, icon, trend, subtitle }: StatCa
                     <span>{trend.value}</span>
                 </div>
             )}
-            {subtitle && <p className="text-sm font-semibold text-primary mt-1">{subtitle}</p>}
         </div>
     )
 }

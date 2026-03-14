@@ -34,17 +34,18 @@ router.get('/', async (req, res) => {
 
 // GET monthly total
 router.get('/monthly-total', async (req, res) => {
+    const TZ = 'Asia/Ho_Chi_Minh'
     const { rows: incomeTotal } = await pool.query(`
     SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count
     FROM income_records
-    WHERE user_id = $1 AND date_trunc('month', received_date) = date_trunc('month', CURRENT_DATE)
+    WHERE user_id = $1 AND date_trunc('month', received_date) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}')::date)
   `, [req.userId])
 
     const { rows: taskTotal } = await pool.query(`
     SELECT COALESCE(SUM(price), 0) AS total, COUNT(*) AS count
     FROM tasks
     WHERE user_id = $1 AND is_paid = true
-    AND date_trunc('month', COALESCE(updated_at, created_at)) = date_trunc('month', CURRENT_DATE)
+    AND date_trunc('month', (COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))
   `, [req.userId])
 
     const total = parseInt(String(incomeTotal[0].total)) + parseInt(String(taskTotal[0].total))
@@ -56,10 +57,12 @@ router.get('/monthly-total', async (req, res) => {
 // POST create income record
 router.post('/', async (req, res) => {
     const { task_name, category, received_date, amount, status = 'completed' } = req.body
+    // Default to today in Vietnam timezone if no date provided
+    const date = received_date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
     const { rows } = await pool.query(
         `INSERT INTO income_records (task_name, category, received_date, amount, status, user_id)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *, 'income' as source`,
-        [task_name, category || null, received_date || null, amount || 0, status, req.userId]
+        [task_name, category || null, date, amount || 0, status, req.userId]
     )
     res.status(201).json(rows[0])
 })
