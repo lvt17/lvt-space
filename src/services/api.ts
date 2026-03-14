@@ -102,6 +102,7 @@ export interface DashboardStats {
     activeTasks: number
     monthlyIncome: number
     unpaidTotal: number
+    totalIncome: number
     completionRate: number
     monthlyTrend: { name: string; income: number }[]
 }

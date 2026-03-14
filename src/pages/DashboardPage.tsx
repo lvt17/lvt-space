@@ -21,6 +21,7 @@ export default function DashboardPage() {
 
     const cards: StatCardData[] = stats
         ? [
+            { title: 'Tổng thu nhập', value: formatVND(stats.totalIncome), icon: 'savings' },
             { title: 'Đã nhận', value: formatVND(stats.monthlyIncome), icon: 'account_balance_wallet' },
             { title: 'Chưa thanh toán', value: formatVND(stats.unpaidTotal), icon: 'hourglass_top' },
             { title: 'Hoàn thành', value: `${stats.completionRate}%`, subtitle: `${stats.completedTasks}/${stats.totalTasks}`, icon: 'check_circle' },
@@ -41,9 +42,9 @@ export default function DashboardPage() {
                 </div>
             ) : (
                 <>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-5 mb-6 md:mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 md:gap-5 mb-6 md:mb-8">
                         {cards.map((stat, i) => (
-                            <div key={stat.title} className={i < 2 ? 'col-span-2 md:col-span-1' : ''}>
+                            <div key={stat.title} className={i < 3 ? 'col-span-2 md:col-span-1' : ''}>
                                 <StatCard {...stat} />
                             </div>
                         ))}

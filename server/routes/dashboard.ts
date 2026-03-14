@@ -9,7 +9,7 @@ router.get('/stats', async (req, res) => {
 
   const TZ = 'Asia/Ho_Chi_Minh'
 
-  const [taskStats, incomeStats, monthlyTrend] = await Promise.all([
+  const [taskStats, incomeStats, monthlyTrend, allIncomeStats] = await Promise.all([
     pool.query(`
       SELECT
         COUNT(*) AS total_tasks,
@@ -40,6 +40,10 @@ router.get('/stats', async (req, res) => {
       GROUP BY date_trunc('month', t.month)
       ORDER BY date_trunc('month', t.month) ASC
     `, [userId]),
+    pool.query(`
+      SELECT COALESCE(SUM(amount), 0) AS total_all_income
+      FROM income_records WHERE user_id = $1
+    `, [userId]),
   ])
 
   const ts = taskStats.rows[0]
@@ -50,12 +54,16 @@ router.get('/stats', async (req, res) => {
   const monthlyIncome = parseInt(incomeStats.rows[0].monthly_income) || 0
   const paidThisMonth = parseInt(ts.paid_this_month) || 0
 
+  const paidTotal = parseInt(ts.paid_total) || 0
+  const allIncomeTotal = parseInt(allIncomeStats.rows[0].total_all_income) || 0
+
   res.json({
     totalTasks,
     completedTasks,
     activeTasks: parseInt(ts.active_tasks) || 0,
     monthlyIncome: monthlyIncome + paidThisMonth,
     unpaidTotal: parseInt(ts.unpaid_total) || 0,
+    totalIncome: paidTotal + allIncomeTotal,
     completionRate,
     monthlyTrend: monthlyTrend.rows.map(r => ({
       name: r.name,
