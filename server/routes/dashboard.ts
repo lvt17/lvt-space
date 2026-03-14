@@ -96,6 +96,7 @@ router.get('/performance', async (req, res) => {
     return {
       month: r.month,
       revenue: parseInt(r.revenue),
+      totalTasks: total,
       completionRate: rate,
       paidCount: parseInt(r.paid_count) || 0,
       unpaidCount: parseInt(r.unpaid_count) || 0,

@@ -110,6 +110,7 @@ export interface DashboardStats {
 export interface PerformanceRow {
     month: string
     revenue: number
+    totalTasks: number
     completionRate: number
     status: 'on-target' | 'below-average'
 }

@@ -21,11 +21,10 @@ export default function DashboardPage() {
 
     const cards: StatCardData[] = stats
         ? [
-            { title: 'Tổng thu nhập', value: formatVND(stats.totalIncome), icon: 'savings' },
-            { title: 'Đã nhận', value: formatVND(stats.monthlyIncome), icon: 'account_balance_wallet' },
+            { title: 'Tổng thu nhập tháng này', value: formatVND(stats.monthlyIncome), icon: 'account_balance_wallet' },
+            { title: 'Đã nhận', value: formatVND(stats.totalIncome), icon: 'savings' },
             { title: 'Chưa thanh toán', value: formatVND(stats.unpaidTotal), icon: 'hourglass_top' },
             { title: 'Hoàn thành', value: `${stats.completionRate}%`, subtitle: `${stats.completedTasks}/${stats.totalTasks}`, icon: 'check_circle' },
-            { title: 'Tổng công việc', value: String(stats.totalTasks), icon: 'assignment' },
         ]
         : []
 
@@ -42,7 +41,7 @@ export default function DashboardPage() {
                 </div>
             ) : (
                 <>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 md:gap-5 mb-6 md:mb-8">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-5 mb-6 md:mb-8">
                         {cards.map((stat, i) => (
                             <div key={stat.title} className={i < 3 ? 'col-span-2 md:col-span-1' : ''}>
                                 <StatCard {...stat} />
@@ -64,17 +63,19 @@ export default function DashboardPage() {
                                     <tr className="text-[0.625rem] text-text-muted font-bold uppercase tracking-wider bg-surface-secondary">
                                         <th className="px-4 sm:px-6 py-3 sm:py-4">Tháng</th>
                                         <th className="px-4 sm:px-6 py-3 sm:py-4">Doanh thu</th>
+                                        <th className="px-4 sm:px-6 py-3 sm:py-4">Tổng việc</th>
                                         <th className="px-4 sm:px-6 py-3 sm:py-4">Hoàn thành</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border-light">
                                     {performance.length === 0 ? (
-                                        <tr><td colSpan={3} className="px-4 sm:px-6 py-10 text-center text-text-muted">Chưa có dữ liệu</td></tr>
+                                        <tr><td colSpan={4} className="px-4 sm:px-6 py-10 text-center text-text-muted">Chưa có dữ liệu</td></tr>
                                     ) : (
                                         performance.map((row) => (
                                             <tr key={row.month} className="hover:bg-surface-secondary transition-all">
                                                 <td className="px-4 sm:px-6 py-4 sm:py-5 font-semibold text-text-primary text-sm">{row.month}</td>
                                                 <td className="px-4 sm:px-6 py-4 sm:py-5 text-text-secondary text-sm">{formatVND(row.revenue)}</td>
+                                                <td className="px-4 sm:px-6 py-4 sm:py-5 text-text-secondary text-sm font-semibold">{row.totalTasks}</td>
                                                 <td className="px-4 sm:px-6 py-4 sm:py-5">
                                                     <div className="flex items-center gap-2 sm:gap-3">
                                                         <div className="flex-1 h-2 bg-primary-lightest rounded-full overflow-hidden">
