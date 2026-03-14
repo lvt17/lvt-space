@@ -49,7 +49,8 @@ const PAGE_SIZE = 10
 export default function TaskManagementPage() {
     const [tasks, setTasks] = useState<TaskRow[]>([])
     const [name, setName] = useState('')
-    const [deadline, setDeadline] = useState(new Date().toISOString().slice(0, 10))
+    const todayVN = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` }
+    const [deadline, setDeadline] = useState(todayVN())
     const [priceInput, setPriceInput] = useState('')
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
@@ -102,10 +103,13 @@ export default function TaskManagementPage() {
         setSubmitting(true)
         try {
             const price = parseCurrency(priceInput)
-            const task = await taskApi.create({ name: name.trim(), deadline: deadline || undefined, price })
+            // Convert dd/mm/yyyy → yyyy-mm-dd for API
+            const parts = deadline.split('/')
+            const isoDeadline = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : undefined
+            const task = await taskApi.create({ name: name.trim(), deadline: isoDeadline, price })
             setTasks(prev => [task, ...prev])
             setName('')
-            setDeadline(new Date().toISOString().slice(0, 10))
+            setDeadline(todayVN())
             setPriceInput('')
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : 'Lỗi')
@@ -355,10 +359,12 @@ export default function TaskManagementPage() {
                     <div className="md:col-span-3">
                         <label className="block text-xs font-semibold text-text-muted uppercase mb-2 ml-1">Hạn chót</label>
                         <input
-                            type="date"
+                            type="text"
                             value={deadline}
                             onChange={(e) => setDeadline(e.target.value)}
-                            className="w-full max-w-full box-border bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary"
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
+                            placeholder={`dd/mm/${new Date().getFullYear()}`}
+                            className="w-full max-w-full box-border bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary placeholder:text-text-muted"
                         />
                     </div>
                     <div className="md:col-span-2">
