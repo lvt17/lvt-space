@@ -4,7 +4,7 @@ import {
     FiLayout, FiCheckSquare, FiDollarSign, FiGrid,
     FiCalendar, FiSettings, FiMoon, FiSun, FiMonitor,
     FiArrowRight, FiShield, FiZap, FiGlobe, FiGithub, FiLinkedin, FiInstagram,
-    FiChevronDown, FiStar, FiUsers, FiTrendingUp
+    FiChevronDown, FiStar, FiUsers, FiTrendingUp, FiTerminal
 } from 'react-icons/fi'
 import SpaceLogo from '@/components/ui/SpaceLogo'
 
@@ -220,10 +220,21 @@ export default function LandingPage() {
                         </span>
                     </h1>
                     {/* Subtitle */}
-                    <p className="text-lg md:text-xl text-white/50 max-w-2xl mx-auto mb-10 leading-relaxed">
+                    <p className="text-lg md:text-xl text-white/50 max-w-2xl mx-auto mb-8 leading-relaxed">
                         {t.hero.subtitle}
                     </p>
-                    {/* CTAs */}
+                    {/* Platform badges */}
+                    <div className="flex items-center justify-center gap-3 mb-10">
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">
+                            <FiLayout className="text-sm" /> Web UI
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
+                            <FiTerminal className="text-sm" /> CLI
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-semibold">
+                            <FiZap className="text-sm" /> MCP
+                        </span>
+                    </div>
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-4">
                         <button
                             onClick={goSignUp}
@@ -402,7 +413,7 @@ export default function LandingPage() {
                                 <p><span className="text-emerald-400">$</span> <span className="text-white/80">lvt login</span></p>
                                 <p className="text-emerald-400/70">  ✓ Đã đăng nhập thành công!</p>
                                 <p><span className="text-emerald-400">$</span> <span className="text-white/80">lvt whoami</span></p>
-                                <p className="text-cyan-400/70">  👤 Your Name · 📋 12/30 tasks · 💰 15.000.000₫</p>
+                                <p className="text-cyan-400/70">  👤 Your Name · 📋 XX/XX tasks · 💰 XX.000.000₫</p>
                                 <p><span className="text-emerald-400">$</span> <span className="text-white/80">lvt stats</span></p>
                                 <p className="text-purple-400/70">  📊 Dashboard — xem ngay trên terminal!</p>
                             </div>
