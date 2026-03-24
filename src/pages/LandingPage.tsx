@@ -122,9 +122,9 @@ const content = {
             button: 'Đăng ký miễn phí',
         },
         footer: {
-            tagline: 'Làm việc đẹp hơn mỗi ngày.',
+            tagline: 'Làm việc nhanh hơn mỗi ngày.',
             madeBy: 'Phát triển bởi',
-            author: 'Liêu Vĩnh Toàn',
+            author: 'LVT team',
             rights: 'Đã đăng ký bản quyền.',
         },
     },
@@ -224,16 +224,32 @@ export default function LandingPage() {
                         {t.hero.subtitle}
                     </p>
                     {/* Platform badges */}
-                    <div className="flex items-center justify-center gap-3 mb-10">
-                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">
-                            <FiLayout className="text-sm" /> Web UI
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold">
-                            <FiTerminal className="text-sm" /> CLI
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-semibold">
-                            <FiZap className="text-sm" /> MCP
-                        </span>
+                    <div className="flex items-center justify-center gap-4 mb-10">
+                        {[
+                            { icon: <FiLayout />, label: 'Web UI', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)' },
+                            { icon: <FiTerminal />, label: 'CLI', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
+                            { icon: <FiZap />, label: 'MCP', color: '#A855F7', bg: 'rgba(168,85,247,0.08)' },
+                        ].map((b, i) => (
+                            <div
+                                key={i}
+                                className="group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-300 hover:scale-105 hover:-translate-y-0.5 cursor-default"
+                                style={{
+                                    color: b.color,
+                                    background: `linear-gradient(135deg, ${b.bg}, rgba(255,255,255,0.02))`,
+                                    border: `1px solid ${b.color}22`,
+                                    boxShadow: `0 4px 20px ${b.color}15, 0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)`,
+                                    backdropFilter: 'blur(12px)',
+                                }}
+                            >
+                                {/* Glow ring */}
+                                <div
+                                    className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                                    style={{ boxShadow: `0 0 30px ${b.color}20, 0 0 60px ${b.color}10` }}
+                                />
+                                <span className="relative text-base">{b.icon}</span>
+                                <span className="relative">{b.label}</span>
+                            </div>
+                        ))}
                     </div>
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-4">
                         <button
