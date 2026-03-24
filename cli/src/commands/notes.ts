@@ -80,7 +80,7 @@ export function registerNotesCommands(program: Command) {
 
                 console.log()
                 console.log(colorFn('━'.repeat(40)))
-                console.log(colorFn.bold(`  ${note.title}`))
+                console.log(chalk.bold(colorFn(`  ${note.title}`)))
                 if (note.description) console.log(chalk.dim(`  ${note.description}`))
                 console.log(colorFn('━'.repeat(40)))
 
