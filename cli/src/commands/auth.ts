@@ -92,14 +92,62 @@ export function registerAuthCommands(program: Command) {
     program
         .command('whoami')
         .description('Hiển thị thông tin user hiện tại')
-        .action(async () => {
+        .option('-f, --format <format>', 'Output format (json)')
+        .action(async (opts) => {
             try {
                 const { api } = await import('../api-client.js')
-                const data = await api<{ userId: string; authMethod: string }>('/api/me')
-                console.log(chalk.bold('👤 User Info'))
-                console.log(`   ID: ${chalk.cyan(data.userId)}`)
-                console.log(`   Auth: ${chalk.dim(data.authMethod)}`)
-                console.log(`   API: ${chalk.dim(config.get('apiUrl'))}`)
+                const data = await api<{
+                    userId: string
+                    authMethod: string
+                    email?: string | null
+                    displayName?: string | null
+                    provider?: string
+                    createdAt?: string | null
+                    stats?: {
+                        totalTasks: number
+                        completedTasks: number
+                        totalIncome: number
+                        incomeRecords: number
+                        activeTokens: number
+                    }
+                }>('/api/me')
+
+                if (opts.format === 'json') {
+                    console.log(JSON.stringify(data, null, 2))
+                    return
+                }
+
+                const name = data.displayName || 'User'
+                const email = data.email || '—'
+                const provider = data.provider || 'email'
+                const providerIcon = provider === 'google' ? '🔵' : provider === 'github' ? '⚫' : '📧'
+                const since = data.createdAt ? new Date(data.createdAt).toLocaleDateString('vi-VN') : '—'
+                const apiUrl = config.get('apiUrl') as string
+
+                console.log()
+                console.log(chalk.bold('╭─────────────────────────────────────╮'))
+                console.log(chalk.bold('│') + '  👤 ' + chalk.bold.cyan(name) + ' '.repeat(Math.max(0, 30 - name.length)) + chalk.bold('│'))
+                console.log(chalk.bold('├─────────────────────────────────────┤'))
+                console.log(chalk.bold('│') + `  📧 ${chalk.dim(email)}` + ' '.repeat(Math.max(0, 31 - email.length)) + chalk.bold('│'))
+                console.log(chalk.bold('│') + `  ${providerIcon} ${chalk.dim('Provider:')} ${provider}` + ' '.repeat(Math.max(0, 21 - provider.length)) + chalk.bold('│'))
+                console.log(chalk.bold('│') + `  📅 ${chalk.dim('Từ:')} ${since}` + ' '.repeat(Math.max(0, 25 - since.length)) + chalk.bold('│'))
+                console.log(chalk.bold('│') + `  🔑 ${chalk.dim('Auth:')} ${data.authMethod}` + ' '.repeat(Math.max(0, 24 - data.authMethod.length)) + chalk.bold('│'))
+
+                if (data.stats) {
+                    const s = data.stats
+                    const rate = s.totalTasks > 0 ? Math.round(s.completedTasks / s.totalTasks * 100) : 0
+                    const income = new Intl.NumberFormat('vi-VN').format(s.totalIncome) + '₫'
+
+                    console.log(chalk.bold('├─────────────────────────────────────┤'))
+                    console.log(chalk.bold('│') + `  📋 Tasks: ${chalk.green(s.completedTasks)}/${chalk.cyan(s.totalTasks)} (${rate}%)` + ' '.repeat(Math.max(0, 16 - String(s.totalTasks).length * 2)) + chalk.bold('│'))
+                    console.log(chalk.bold('│') + `  💰 Thu nhập: ${chalk.yellow(income)}` + ' '.repeat(Math.max(0, 21 - income.length)) + chalk.bold('│'))
+                    console.log(chalk.bold('│') + `  🔐 Tokens: ${chalk.dim(String(s.activeTokens))} active` + ' '.repeat(Math.max(0, 18 - String(s.activeTokens).length)) + chalk.bold('│'))
+                }
+
+                console.log(chalk.bold('├─────────────────────────────────────┤'))
+                console.log(chalk.bold('│') + `  🌐 ${chalk.dim(apiUrl)}` + ' '.repeat(Math.max(0, 31 - apiUrl.length)) + chalk.bold('│'))
+                console.log(chalk.bold('╰─────────────────────────────────────╯'))
+                console.log()
             } catch (err) {
                 error(err instanceof Error ? err.message : 'Lỗi')
             }

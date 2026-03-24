@@ -9,6 +9,7 @@ import checklistRoutes from '../server/routes/checklists.js'
 import aiRoutes from '../server/routes/ai.js'
 import tokenRoutes from '../server/routes/tokens.js'
 import cliAuthRoutes from '../server/routes/cliAuth.js'
+import pool from '../server/db.js'
 import { requireAuth, requireSupabaseAuth } from '../server/auth.js'
 
 dotenv.config()
@@ -33,8 +34,40 @@ app.use('/api/checklists', requireAuth, checklistRoutes)
 app.use('/api/ai', requireAuth, aiRoutes)
 
 // User info endpoint (for CLI whoami)
-app.get('/api/me', requireAuth, (req, res) => {
-    res.json({ userId: req.userId, authMethod: req.authMethod })
+app.get('/api/me', requireAuth, async (req, res) => {
+    try {
+        const { createClient } = await import('@supabase/supabase-js')
+        const supabase = createClient(
+            process.env.VITE_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!,
+        )
+        const { data: userData } = await supabase.auth.admin.getUserById(req.userId!)
+
+        const [taskStats, incomeStats, tokenStats] = await Promise.all([
+            pool.query(`SELECT count(*) as total, count(*) FILTER (WHERE status = 'completed') as completed FROM tasks WHERE user_id = $1`, [req.userId]),
+            pool.query(`SELECT COALESCE(SUM(amount), 0) as total_income, count(*) as records FROM income WHERE user_id = $1`, [req.userId]),
+            pool.query(`SELECT count(*) as total FROM personal_tokens WHERE user_id = $1`, [req.userId]),
+        ])
+
+        const user = userData?.user
+        res.json({
+            userId: req.userId,
+            authMethod: req.authMethod,
+            email: user?.email || null,
+            displayName: user?.user_metadata?.display_name || user?.user_metadata?.full_name || null,
+            provider: user?.app_metadata?.provider || 'email',
+            createdAt: user?.created_at || null,
+            stats: {
+                totalTasks: parseInt(taskStats.rows[0]?.total || '0'),
+                completedTasks: parseInt(taskStats.rows[0]?.completed || '0'),
+                totalIncome: parseFloat(incomeStats.rows[0]?.total_income || '0'),
+                incomeRecords: parseInt(incomeStats.rows[0]?.records || '0'),
+                activeTokens: parseInt(tokenStats.rows[0]?.total || '0'),
+            },
+        })
+    } catch {
+        res.json({ userId: req.userId, authMethod: req.authMethod })
+    }
 })
 
 // Health check
