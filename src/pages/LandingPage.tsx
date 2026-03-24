@@ -224,30 +224,41 @@ export default function LandingPage() {
                         {t.hero.subtitle}
                     </p>
                     {/* Platform badges */}
-                    <div className="flex items-center justify-center gap-4 mb-10">
+                    <div className="flex items-center justify-center gap-5 mb-10">
                         {[
-                            { icon: <FiLayout />, label: 'Web UI', color: '#3B82F6', bg: 'rgba(59,130,246,0.08)' },
-                            { icon: <FiTerminal />, label: 'CLI', color: '#10B981', bg: 'rgba(16,185,129,0.08)' },
-                            { icon: <FiZap />, label: 'MCP', color: '#A855F7', bg: 'rgba(168,85,247,0.08)' },
+                            { icon: <FiLayout />, label: 'Web UI', color: '#3B82F6', glow: '#3B82F6' },
+                            { icon: <FiTerminal />, label: 'CLI', color: '#10B981', glow: '#10B981' },
+                            { icon: <FiZap />, label: 'MCP', color: '#A855F7', glow: '#A855F7' },
                         ].map((b, i) => (
                             <div
                                 key={i}
-                                className="group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold transition-all duration-300 hover:scale-105 hover:-translate-y-0.5 cursor-default"
-                                style={{
-                                    color: b.color,
-                                    background: `linear-gradient(135deg, ${b.bg}, rgba(255,255,255,0.02))`,
-                                    border: `1px solid ${b.color}22`,
-                                    boxShadow: `0 4px 20px ${b.color}15, 0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)`,
-                                    backdropFilter: 'blur(12px)',
-                                }}
+                                className="group relative cursor-default"
+                                style={{ perspective: '600px' }}
                             >
-                                {/* Glow ring */}
+                                {/* Glow behind */}
                                 <div
-                                    className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                                    style={{ boxShadow: `0 0 30px ${b.color}20, 0 0 60px ${b.color}10` }}
+                                    className="absolute -inset-1 rounded-2xl blur-lg opacity-40 group-hover:opacity-70 transition-opacity duration-500"
+                                    style={{ background: `radial-gradient(circle, ${b.glow}40, transparent 70%)` }}
                                 />
-                                <span className="relative text-base">{b.icon}</span>
-                                <span className="relative">{b.label}</span>
+                                {/* Card */}
+                                <div
+                                    className="relative flex items-center gap-2.5 px-6 py-3 rounded-2xl text-sm font-bold transition-all duration-300 group-hover:scale-[1.08] group-hover:-translate-y-1"
+                                    style={{
+                                        color: b.color,
+                                        background: `linear-gradient(145deg, ${b.glow}12 0%, ${b.glow}06 50%, rgba(10,10,20,0.8) 100%)`,
+                                        border: `1.5px solid ${b.color}35`,
+                                        boxShadow: `
+                                            0 8px 32px ${b.glow}20,
+                                            0 2px 8px rgba(0,0,0,0.5),
+                                            inset 0 1px 0 ${b.color}25,
+                                            inset 0 -1px 0 rgba(0,0,0,0.3)
+                                        `,
+                                        backdropFilter: 'blur(16px)',
+                                    }}
+                                >
+                                    <span className="text-lg">{b.icon}</span>
+                                    <span>{b.label}</span>
+                                </div>
                             </div>
                         ))}
                     </div>
