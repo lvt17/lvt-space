@@ -35,7 +35,7 @@ router.post('/request', (_req, res) => {
         status: 'pending',
     })
 
-    const baseUrl = process.env.APP_URL || 'http://localhost:5173'
+    const baseUrl = process.env.APP_URL || 'https://lvtspace.me'
     res.json({
         code,
         loginUrl: `${baseUrl}/cli-auth?code=${code}`,
