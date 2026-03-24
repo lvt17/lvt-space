@@ -3,15 +3,16 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useTheme, PALETTES, type ThemeMode } from '@/contexts/ThemeContext'
 import { supabase } from '@/services/supabase'
 import Header from '@/components/layout/Header'
-import { FiUser, FiLock, FiCheck, FiAlertCircle, FiTrash2, FiMail, FiSun, FiMoon, FiMonitor, FiSliders, FiShield, FiRefreshCw, FiHeart } from 'react-icons/fi'
+import { FiUser, FiLock, FiCheck, FiAlertCircle, FiTrash2, FiMail, FiSun, FiMoon, FiMonitor, FiSliders, FiShield, FiRefreshCw, FiHeart, FiTerminal, FiCopy } from 'react-icons/fi'
 import { taskApi } from '@/services/api'
 
-type SettingsSection = 'appearance' | 'profile' | 'security' | 'updates' | 'credits' | 'danger'
+type SettingsSection = 'appearance' | 'profile' | 'security' | 'developer' | 'updates' | 'credits' | 'danger'
 
 const NAV_ITEMS: { id: SettingsSection; label: string; icon: typeof FiSun; description: string }[] = [
     { id: 'appearance', label: 'Giao diện', icon: FiSliders, description: 'Theme, bảng màu' },
     { id: 'profile', label: 'Hồ sơ', icon: FiUser, description: 'Tên, email' },
     { id: 'security', label: 'Bảo mật', icon: FiShield, description: 'Mật khẩu' },
+    { id: 'developer', label: 'Developer', icon: FiTerminal, description: 'CLI & MCP setup' },
     { id: 'updates', label: 'Cập nhật', icon: FiRefreshCw, description: 'Lịch sử phiên bản' },
     { id: 'credits', label: 'Credits', icon: FiHeart, description: 'Thông tin & công nghệ' },
     { id: 'danger', label: 'Nâng cao', icon: FiTrash2, description: 'Xoá dữ liệu' },
@@ -465,6 +466,168 @@ export default function SettingsPage() {
                                         </button>
                                     </div>
                                 </form>
+                            </div>
+                        )}
+
+                        {/* ═══ Section: Developer ═══ */}
+                        {activeSection === 'developer' && (
+                            <div className="space-y-5">
+                                {/* CLI Setup */}
+                                <div className="glass-card rounded-2xl md:rounded-3xl p-6 sm:p-8">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center">
+                                            <FiTerminal className="text-base text-primary" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-base text-text-primary">CLI Setup</h3>
+                                            <p className="text-xs text-text-muted">Quản lý workspace từ terminal</p>
+                                        </div>
+                                        <span className="ml-auto text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">v1.0.0</span>
+                                    </div>
+
+                                    {/* Steps */}
+                                    <div className="space-y-4">
+                                        {[
+                                            {
+                                                step: 1,
+                                                title: 'Cài đặt CLI',
+                                                code: 'npm install -g @lvt17/lvt-cli',
+                                                desc: 'Cài đặt toàn cục, dùng lệnh lvt ở bất kỳ đâu',
+                                            },
+                                            {
+                                                step: 2,
+                                                title: 'Đăng nhập',
+                                                code: 'lvt login',
+                                                desc: 'Mở trình duyệt → đăng nhập → token tự động lưu',
+                                            },
+                                            {
+                                                step: 3,
+                                                title: 'Bắt đầu sử dụng',
+                                                code: 'lvt tasks',
+                                                desc: 'Xem danh sách tasks. Chạy lvt --help để xem tất cả lệnh',
+                                            },
+                                        ].map(s => (
+                                            <div key={s.step} className="flex gap-4">
+                                                <div className="shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
+                                                    {s.step}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-semibold text-text-primary">{s.title}</p>
+                                                    <div className="mt-1.5 flex items-center gap-2">
+                                                        <code className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-xs font-mono text-primary truncate">
+                                                            {s.code}
+                                                        </code>
+                                                        <button
+                                                            onClick={() => navigator.clipboard.writeText(s.code)}
+                                                            className="shrink-0 p-2 rounded-lg bg-surface hover:bg-surface-hover border border-border transition-colors cursor-pointer"
+                                                            title="Copy"
+                                                        >
+                                                            <FiCopy className="text-xs text-text-muted" />
+                                                        </button>
+                                                    </div>
+                                                    <p className="text-[0.65rem] text-text-muted mt-1">{s.desc}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Command Reference */}
+                                <div className="glass-card rounded-2xl md:rounded-3xl p-6 sm:p-8">
+                                    <h4 className="text-[0.65rem] font-bold text-text-muted uppercase tracking-[0.1em] mb-4">Danh sách lệnh</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {[
+                                            { cmd: 'lvt tasks', desc: 'Xem / quản lý tasks' },
+                                            { cmd: 'lvt tasks add "Tên"', desc: 'Tạo task mới' },
+                                            { cmd: 'lvt daily', desc: 'Checklist hôm nay' },
+                                            { cmd: 'lvt daily tomorrow', desc: 'Checklist ngày mai' },
+                                            { cmd: 'lvt income', desc: 'Xem thu nhập' },
+                                            { cmd: 'lvt income total', desc: 'Tổng thu nhập tháng' },
+                                            { cmd: 'lvt stats', desc: 'Dashboard tổng quan' },
+                                            { cmd: 'lvt performance', desc: 'Hiệu suất 6 tháng' },
+                                            { cmd: 'lvt notes', desc: 'Xem ghi chú' },
+                                            { cmd: 'lvt ai "prompt"', desc: 'Sinh checklist AI' },
+                                            { cmd: 'lvt whoami', desc: 'Thông tin user' },
+                                            { cmd: 'lvt config', desc: 'Quản lý config' },
+                                        ].map(c => (
+                                            <div key={c.cmd} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-surface-hover transition-colors">
+                                                <code className="text-xs font-mono text-primary bg-primary/5 px-2 py-1 rounded shrink-0">{c.cmd}</code>
+                                                <span className="text-xs text-text-muted truncate">{c.desc}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="text-[0.65rem] text-text-muted mt-3">
+                                        Tất cả lệnh hỗ trợ <code className="bg-surface px-1 rounded">--format json</code> để xuất JSON và <code className="bg-surface px-1 rounded">--help</code> để xem chi tiết.
+                                    </p>
+                                </div>
+
+                                {/* MCP / OpenClaw Skill */}
+                                <div className="glass-card rounded-2xl md:rounded-3xl p-6 sm:p-8">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-9 h-9 bg-emerald-500/10 rounded-xl flex items-center justify-center text-lg">
+                                            🤖
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-base text-text-primary">MCP / OpenClaw Skill</h3>
+                                            <p className="text-xs text-text-muted">Điều khiển Lvt Space bằng AI Agent</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-surface border border-border rounded-xl">
+                                            <p className="text-sm font-semibold text-text-primary mb-2">Yêu cầu</p>
+                                            <ul className="space-y-1.5 text-xs text-text-secondary">
+                                                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">•</span> OpenClaw đã cài trên máy</li>
+                                                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">•</span> CLI đã đăng nhập (<code className="bg-surface-hover px-1 rounded">lvt login</code>)</li>
+                                            </ul>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-sm font-semibold text-text-primary mb-2">Cài đặt Skill</p>
+                                            <div className="space-y-2">
+                                                {[
+                                                    { label: 'Copy skill vào OpenClaw', code: 'cp -r ~/.agents/skills/lvt-space ~/.openclaw/skills/' },
+                                                    { label: 'Hoặc clone từ GitHub', code: 'git clone https://github.com/lvt17/lvt-space.git /tmp/lvt && cp -r /tmp/lvt/.agents/skills/lvt-space ~/.agents/skills/' },
+                                                ].map(s => (
+                                                    <div key={s.label}>
+                                                        <p className="text-[0.65rem] text-text-muted mb-1">{s.label}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <code className="flex-1 bg-surface border border-border rounded-lg px-3 py-2 text-[0.65rem] font-mono text-text-secondary overflow-x-auto">
+                                                                {s.code}
+                                                            </code>
+                                                            <button
+                                                                onClick={() => navigator.clipboard.writeText(s.code)}
+                                                                className="shrink-0 p-2 rounded-lg bg-surface hover:bg-surface-hover border border-border transition-colors cursor-pointer"
+                                                            >
+                                                                <FiCopy className="text-xs text-text-muted" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-xl">
+                                            <p className="text-sm font-semibold text-text-primary mb-2">Ví dụ sử dụng</p>
+                                            <div className="space-y-1.5 text-xs text-text-secondary">
+                                                <p>Nói với AI Agent bằng ngôn ngữ tự nhiên:</p>
+                                                <div className="mt-2 space-y-1">
+                                                    {[
+                                                        '"Cho tao xem task"',
+                                                        '"Thêm task Thiết kế UI deadline ngày mai"',
+                                                        '"Hôm nay có gì phải làm?"',
+                                                        '"Tháng này kiếm được bao nhiêu?"',
+                                                        '"Thống kê tổng quan đi"',
+                                                    ].map(ex => (
+                                                        <p key={ex} className="font-mono text-primary/80 text-[0.65rem]">
+                                                            → {ex}
+                                                        </p>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
