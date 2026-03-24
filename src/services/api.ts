@@ -29,12 +29,13 @@ export interface TaskRow {
     price: number
     status: string
     is_paid: boolean
+    description: string | null
     created_at: string
 }
 
 export const taskApi = {
     list: () => request<TaskRow[]>('/tasks'),
-    create: (data: { name: string; deadline?: string; price: number }) =>
+    create: (data: { name: string; deadline?: string; price: number; description?: string }) =>
         request<TaskRow>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Partial<TaskRow>) =>
         request<TaskRow>(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -85,10 +86,10 @@ export interface IncomePage {
 }
 
 export const incomeApi = {
-    list: (page = 1, limit = 10) =>
-        request<IncomePage>(`/income?page=${page}&limit=${limit}`),
-    monthlyTotal: () =>
-        request<{ total: number; count: string }>('/income/monthly-total'),
+    list: (page = 1, limit = 10, month?: string) =>
+        request<IncomePage>(`/income?page=${page}&limit=${limit}${month ? `&month=${month}` : ''}`),
+    monthlyTotal: (month?: string) =>
+        request<{ total: number; count: string }>(`/income/monthly-total${month ? `?month=${month}` : ''}`),
     create: (data: { task_name: string; category?: string; received_date?: string; amount: number }) =>
         request<IncomeRow>('/income', { method: 'POST', body: JSON.stringify(data) }),
     remove: (id: string) =>
@@ -127,6 +128,7 @@ export interface ChecklistItem {
     text: string
     is_checked: boolean
     indent_level: number
+    description?: string
 }
 
 export interface ChecklistRow {
@@ -139,6 +141,8 @@ export interface ChecklistRow {
     pos_y: number
     width: number | null
     height: number | null
+    type: 'checklist' | 'text'
+    content: string
     created_at: string
     updated_at: string
 }
@@ -146,7 +150,7 @@ export interface ChecklistRow {
 export const checklistApi = {
     list: () => request<ChecklistRow[]>('/checklists'),
     get: (id: string) => request<ChecklistRow>(`/checklists/${id}`),
-    create: (data: { title?: string; description?: string; items?: ChecklistItem[]; color?: string }) =>
+    create: (data: { title?: string; description?: string; items?: ChecklistItem[]; color?: string; type?: string; content?: string }) =>
         request<ChecklistRow>('/checklists', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Partial<ChecklistRow>) =>
         request<ChecklistRow>(`/checklists/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

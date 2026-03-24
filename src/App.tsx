@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { DataCacheProvider } from './contexts/DataCacheContext'
+import { ToastProvider } from './contexts/ToastContext'
 import AppLayout from './components/layout/AppLayout'
 
 /* ─── Lazy-loaded pages (route-level code splitting) ─── */
@@ -14,6 +16,7 @@ const IncomeReceivedPage = lazy(() => import('./pages/IncomeReceivedPage'))
 const ChecklistPage = lazy(() => import('./pages/ChecklistPage'))
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
+const CliAuthPage = lazy(() => import('./pages/CliAuthPage'))
 
 function PageLoader() {
     return (
@@ -53,6 +56,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
     return (
         <ThemeProvider>
+        <ToastProvider>
         <BrowserRouter>
             <AuthProvider>
                 <Suspense fallback={<PageLoader />}>
@@ -60,7 +64,8 @@ export default function App() {
                     <Route path="/" element={<PublicRoute><LandingPage /></PublicRoute>} />
                     <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
                     <Route path="/reset-password" element={<ResetPasswordPage />} />
-                    <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                    <Route path="/cli-auth" element={<CliAuthPage />} />
+                    <Route element={<ProtectedRoute><DataCacheProvider><AppLayout /></DataCacheProvider></ProtectedRoute>}>
                         <Route path="/dashboard" element={<DashboardPage />} />
                         <Route path="/tasks" element={<TaskManagementPage />} />
                         <Route path="/today" element={<DailyChecklistPage />} />
@@ -72,6 +77,7 @@ export default function App() {
                 </Suspense>
             </AuthProvider>
         </BrowserRouter>
+        </ToastProvider>
         </ThemeProvider>
     )
 }

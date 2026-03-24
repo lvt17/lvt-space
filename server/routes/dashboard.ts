@@ -32,7 +32,7 @@ router.get('/stats', async (req, res) => {
         COALESCE(SUM(t.price), 0) AS income
       FROM (
         SELECT date_trunc('month', (COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')) AS month, price
-        FROM tasks WHERE is_paid = true AND user_id = $1
+        FROM tasks WHERE user_id = $1
         UNION ALL
         SELECT date_trunc('month', received_date) AS month, amount AS price
         FROM income_records WHERE user_id = $1 AND received_date IS NOT NULL
@@ -42,8 +42,9 @@ router.get('/stats', async (req, res) => {
       ORDER BY date_trunc('month', t.month) ASC
     `, [userId]),
     pool.query(`
-      SELECT COALESCE(SUM(amount), 0) AS total_all_income
-      FROM income_records WHERE user_id = $1
+      SELECT COALESCE(SUM(amount), 0) AS total_income_this_month
+      FROM income_records
+      WHERE user_id = $1 AND date_trunc('month', received_date) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}')::date)
     `, [userId]),
   ])
 
@@ -57,7 +58,7 @@ router.get('/stats', async (req, res) => {
   const allTasksThisMonth = parseInt(ts.all_tasks_this_month) || 0
 
   const paidTotal = parseInt(ts.paid_total) || 0
-  const allIncomeTotal = parseInt(allIncomeStats.rows[0].total_all_income) || 0
+  const incomeThisMonth = parseInt(allIncomeStats.rows[0].total_income_this_month) || 0
 
   res.json({
     totalTasks,
@@ -66,7 +67,7 @@ router.get('/stats', async (req, res) => {
     monthlyIncome: monthlyIncome + paidThisMonth,
     monthlyTotalIncome: allTasksThisMonth + monthlyIncome,
     unpaidTotal: parseInt(ts.unpaid_total) || 0,
-    totalIncome: paidTotal + allIncomeTotal,
+    totalIncome: paidThisMonth + incomeThisMonth,
     completionRate,
     monthlyTrend: monthlyTrend.rows.map(r => ({
       name: r.name,
@@ -77,32 +78,47 @@ router.get('/stats', async (req, res) => {
 
 // GET monthly performance (last 6 months, filtered by user)
 router.get('/performance', async (req, res) => {
+  const TZ = 'Asia/Ho_Chi_Minh'
   const { rows } = await pool.query(`
+    WITH task_months AS (
+      SELECT
+        date_trunc('month', (created_at AT TIME ZONE '${TZ}')) AS month,
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+        COALESCE(SUM(price), 0) AS task_revenue
+      FROM tasks
+      WHERE user_id = $1 AND created_at >= (NOW() AT TIME ZONE '${TZ}') - INTERVAL '6 months'
+      GROUP BY date_trunc('month', (created_at AT TIME ZONE '${TZ}'))
+    ),
+    income_months AS (
+      SELECT
+        date_trunc('month', received_date) AS month,
+        COALESCE(SUM(amount), 0) AS income_revenue
+      FROM income_records
+      WHERE user_id = $1 AND received_date IS NOT NULL
+        AND received_date >= ((NOW() AT TIME ZONE '${TZ}')::date - INTERVAL '6 months')
+      GROUP BY date_trunc('month', received_date)
+    )
     SELECT
-      to_char(date_trunc('month', created_at), 'TMTháng MM') AS month,
-      COUNT(*) AS total,
-      COUNT(*) FILTER (WHERE status = 'completed') AS completed,
-      COALESCE(SUM(price), 0) AS revenue,
-      COUNT(*) FILTER (WHERE is_paid = true) AS paid_count,
-      COUNT(*) FILTER (WHERE is_paid = false) AS unpaid_count
-    FROM tasks
-    WHERE user_id = $1 AND created_at >= CURRENT_DATE - INTERVAL '6 months'
-    GROUP BY date_trunc('month', created_at)
-    ORDER BY date_trunc('month', created_at) DESC
+      to_char(COALESCE(t.month, i.month), 'TMTháng MM') AS month,
+      COALESCE(t.total, 0) AS total,
+      COALESCE(t.completed, 0) AS completed,
+      COALESCE(t.task_revenue, 0) + COALESCE(i.income_revenue, 0) AS revenue
+    FROM task_months t
+    FULL OUTER JOIN income_months i ON t.month = i.month
+    ORDER BY COALESCE(t.month, i.month) DESC
     LIMIT 6
   `, [req.userId])
 
   res.json(rows.map(r => {
-    const total = parseInt(r.total) || 1
+    const total = parseInt(r.total) || 0
     const completed = parseInt(r.completed) || 0
-    const rate = Math.round((completed / total) * 100)
+    const rate = total > 0 ? Math.round((completed / total) * 100) : 0
     return {
       month: r.month,
       revenue: parseInt(r.revenue),
       totalTasks: total,
       completionRate: rate,
-      paidCount: parseInt(r.paid_count) || 0,
-      unpaidCount: parseInt(r.unpaid_count) || 0,
       status: rate >= 50 ? 'on-target' : 'below-average',
     }
   }))

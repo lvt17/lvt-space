@@ -1,8 +1,11 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import Header from '@/components/layout/Header'
 import { taskApi, type TaskRow } from '@/services/api'
+import { useDataCache } from '@/contexts/DataCacheContext'
+import { useToast } from '@/contexts/ToastContext'
 import { parseCurrency, formatVND } from '@/utils/currency'
-import { FiSearch, FiPlus, FiTrash2, FiRefreshCw, FiChevronLeft, FiChevronRight, FiZap, FiX, FiTerminal, FiEdit2, FiCheck, FiSettings, FiChevronDown, FiHelpCircle } from 'react-icons/fi'
+import { FiSearch, FiPlus, FiTrash2, FiRefreshCw, FiChevronLeft, FiChevronRight, FiZap, FiX, FiTerminal, FiEdit2, FiCheck, FiSettings, FiChevronDown, FiHelpCircle, FiFileText } from 'react-icons/fi'
+import RichTextEditorModal from '@/components/ui/RichTextEditorModal'
 
 /* ─── Server Status Options ─── */
 const SERVER_STATUSES = [
@@ -47,29 +50,28 @@ function saveMappings(mappings: StatusMapping[]) {
 const PAGE_SIZE = 10
 
 export default function TaskManagementPage() {
-    const [tasks, setTasks] = useState<TaskRow[]>([])
+    const { tasks, setTasks, tasksLoading: loading, refreshTasks } = useDataCache()
+    const { toast } = useToast()
     const [name, setName] = useState('')
     const todayVN = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` }
     const [deadline, setDeadline] = useState(todayVN())
     const [priceInput, setPriceInput] = useState('')
-    const [loading, setLoading] = useState(true)
+    const [description, setDescription] = useState('')
+    const [showDescModal, setShowDescModal] = useState(false)
     const [error, setError] = useState('')
     const [submitting, setSubmitting] = useState(false)
 
     /* Search & filter */
     const [search, setSearch] = useState('')
     const [statusFilter, setStatusFilter] = useState('all')
+    const [createdFrom, setCreatedFrom] = useState('')
+    const [createdTo, setCreatedTo] = useState('')
+    const [deadlineFrom, setDeadlineFrom] = useState('')
+    const [deadlineTo, setDeadlineTo] = useState('')
     const [page, setPage] = useState(1)
 
-    const loadTasks = () => {
-        setLoading(true)
-        taskApi.list()
-            .then(setTasks)
-            .catch(e => setError(e.message))
-            .finally(() => setLoading(false))
-    }
-
-    useEffect(() => { loadTasks() }, [])
+    // Background refresh on mount to keep data fresh
+    useEffect(() => { refreshTasks() }, [refreshTasks])
 
     /* Filtered + paginated tasks */
     const filtered = useMemo(() => {
@@ -85,8 +87,22 @@ export default function TaskManagementPage() {
                 result = result.filter(t => t.status === statusFilter)
             }
         }
+        // Filter by created date range
+        if (createdFrom) {
+            result = result.filter(t => t.created_at && t.created_at.slice(0, 10) >= createdFrom)
+        }
+        if (createdTo) {
+            result = result.filter(t => t.created_at && t.created_at.slice(0, 10) <= createdTo)
+        }
+        // Filter by deadline range
+        if (deadlineFrom) {
+            result = result.filter(t => t.deadline && t.deadline.slice(0, 10) >= deadlineFrom)
+        }
+        if (deadlineTo) {
+            result = result.filter(t => t.deadline && t.deadline.slice(0, 10) <= deadlineTo)
+        }
         return result
-    }, [tasks, search, statusFilter])
+    }, [tasks, search, statusFilter, createdFrom, createdTo, deadlineFrom, deadlineTo])
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
     const safePage = Math.min(page, totalPages)
@@ -96,7 +112,57 @@ export default function TaskManagementPage() {
     }, [filtered, safePage])
 
     // Reset page when search/filter changes
-    useEffect(() => { setPage(1) }, [search, statusFilter])
+    useEffect(() => { setPage(1) }, [search, statusFilter, createdFrom, createdTo, deadlineFrom, deadlineTo])
+
+    // Deadline reminders — run once when tasks load
+    useEffect(() => {
+        if (loading || tasks.length === 0) return
+        const shown = sessionStorage.getItem('deadline_reminders_shown')
+        if (shown) return
+        sessionStorage.setItem('deadline_reminders_shown', '1')
+
+        const todayISO = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
+        const today = new Date(todayISO + 'T00:00:00')
+        const tomorrow = new Date(today)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        const tomorrowISO = tomorrow.toISOString().slice(0, 10)
+
+        const todayTasks: string[] = []
+        const tomorrowTasks: string[] = []
+
+        for (const t of tasks) {
+            if (!t.deadline || t.status === 'paid') continue
+            const dl = t.deadline.slice(0, 10)
+            if (dl === todayISO) todayTasks.push(t.name)
+            else if (dl === tomorrowISO) tomorrowTasks.push(t.name)
+        }
+
+        // Show today's deadline reminders first (more urgent)
+        if (todayTasks.length > 0) {
+            setTimeout(() => {
+                toast.warning(
+                    `⏰ Hôm nay là hạn chót!`,
+                    todayTasks.length === 1
+                        ? `"${todayTasks[0]}" cần hoàn thành hôm nay`
+                        : `${todayTasks.length} công việc cần hoàn thành: ${todayTasks.join(', ')}`,
+                    6000
+                )
+            }, 1500)
+        }
+
+        // Show tomorrow's deadline warnings
+        if (tomorrowTasks.length > 0) {
+            setTimeout(() => {
+                toast.info(
+                    `📅 Deadline ngày mai`,
+                    tomorrowTasks.length === 1
+                        ? `"${tomorrowTasks[0]}" sẽ đến hạn vào ngày mai`
+                        : `${tomorrowTasks.length} công việc sẽ đến hạn: ${tomorrowTasks.join(', ')}`,
+                    5000
+                )
+            }, todayTasks.length > 0 ? 3500 : 1500)
+        }
+    }, [loading, tasks])
 
     const handleAddTask = useCallback(async () => {
         if (!name.trim() || submitting) return
@@ -106,62 +172,100 @@ export default function TaskManagementPage() {
             // Convert dd/mm/yyyy → yyyy-mm-dd for API
             const parts = deadline.split('/')
             const isoDeadline = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : undefined
-            const task = await taskApi.create({ name: name.trim(), deadline: isoDeadline, price })
+            const task = await taskApi.create({ name: name.trim(), deadline: isoDeadline, price, description: description || undefined })
             setTasks(prev => [task, ...prev])
             setName('')
             setDeadline(todayVN())
             setPriceInput('')
+            setDescription('')
+            toast.success('Đã thêm công việc', name.trim())
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : 'Lỗi')
+            toast.error('Lỗi thêm công việc', e instanceof Error ? e.message : 'Đã xảy ra lỗi')
         } finally {
             setSubmitting(false)
         }
-    }, [name, deadline, priceInput, submitting])
+    }, [name, deadline, priceInput, description, submitting])
 
     const handleDelete = useCallback(async (id: string) => {
+        const task = tasks.find(t => t.id === id)
         await taskApi.remove(id)
         setTasks(prev => prev.filter(t => t.id !== id))
-    }, [])
+        toast.success('Đã xoá công việc', task?.name ?? '')
+    }, [tasks, toast])
 
     const handleTogglePaid = useCallback(async (id: string) => {
-        setTasks(prev => {
-            const task = prev.find(t => t.id === id)
-            if (!task) return prev
-            return prev // optimistic: actual update happens async
-        })
-        // Get current task state for logic
-        let currentTask: TaskRow | undefined
-        setTasks(prev => { currentTask = prev.find(t => t.id === id); return prev })
-        const willBePaid = !currentTask?.is_paid
-        const updated = await taskApi.togglePaid(id)
-        if (willBePaid && updated.status !== 'paid') {
-            const u2 = await taskApi.update(id, { status: 'paid' })
-            setTasks(prev => prev.map(t => t.id === id ? u2 : t))
-        } else if (!willBePaid && updated.status === 'paid') {
-            const u2 = await taskApi.update(id, { status: 'completed' })
-            setTasks(prev => prev.map(t => t.id === id ? u2 : t))
-        } else {
-            setTasks(prev => prev.map(t => t.id === id ? updated : t))
+        // Optimistic: toggle paid + update status immediately
+        let willBePaid = false
+        let taskName = ''
+        setTasks(prev => prev.map(t => {
+            if (t.id !== id) return t
+            willBePaid = !t.is_paid
+            taskName = t.name
+            return {
+                ...t,
+                is_paid: !t.is_paid,
+                status: !t.is_paid ? 'paid' : 'completed',
+            }
+        }))
+        try {
+            const updated = await taskApi.togglePaid(id)
+            if (willBePaid && updated.status !== 'paid') {
+                const u2 = await taskApi.update(id, { status: 'paid' })
+                setTasks(prev => prev.map(t => t.id === id ? u2 : t))
+            } else if (!willBePaid && updated.status === 'paid') {
+                const u2 = await taskApi.update(id, { status: 'completed' })
+                setTasks(prev => prev.map(t => t.id === id ? u2 : t))
+            } else {
+                setTasks(prev => prev.map(t => t.id === id ? updated : t))
+            }
+            toast.success(
+                willBePaid ? 'Đã thanh toán' : 'Chưa thanh toán',
+                taskName
+            )
+        } catch {
+            // Revert on error
+            setTasks(prev => prev.map(t => {
+                if (t.id !== id) return t
+                return { ...t, is_paid: !t.is_paid, status: t.is_paid ? 'paid' : 'completed' }
+            }))
+            toast.error('Lỗi', 'Không thể cập nhật trạng thái thanh toán')
         }
     }, [])
 
     const handleStatusChange = useCallback(async (id: string, newStatus: string) => {
-        let currentTask: TaskRow | undefined
-        setTasks(prev => { currentTask = prev.find(t => t.id === id); return prev })
-        let updated = await taskApi.update(id, { status: newStatus })
-        if (newStatus === 'paid' && !currentTask?.is_paid) {
-            updated = await taskApi.togglePaid(id)
-        } else if (newStatus !== 'paid' && currentTask?.is_paid) {
-            updated = await taskApi.togglePaid(id)
+        // Optimistic: update status immediately
+        const isPaidStatus = newStatus === 'paid'
+        const taskName = tasks.find(t => t.id === id)?.name ?? ''
+        setTasks(prev => prev.map(t => {
+            if (t.id !== id) return t
+            return { ...t, status: newStatus, is_paid: isPaidStatus }
+        }))
+        try {
+            let currentTask: TaskRow | undefined
+            setTasks(prev => { currentTask = prev.find(t => t.id === id); return prev })
+            let updated = await taskApi.update(id, { status: newStatus })
+            if (newStatus === 'paid' && !currentTask?.is_paid) {
+                updated = await taskApi.togglePaid(id)
+            } else if (newStatus !== 'paid' && currentTask?.is_paid) {
+                updated = await taskApi.togglePaid(id)
+            }
+            setTasks(prev => prev.map(t => t.id === id ? updated : t))
+            const statusLabel = SERVER_STATUSES.find(s => s.value === newStatus)
+            toast.info('Cập nhật trạng thái', `${taskName} → ${statusLabel?.emoji ?? ''} ${statusLabel?.label ?? newStatus}`)
+        } catch {
+            toast.error('Lỗi cập nhật', 'Không thể thay đổi trạng thái')
+            taskApi.list().then(setTasks).catch(() => {})
         }
-        setTasks(prev => prev.map(t => t.id === id ? updated : t))
-    }, [])
+    }, [tasks, toast])
 
     /* ─── Edit Task ─── */
     const [editingTask, setEditingTask] = useState<TaskRow | null>(null)
     const [editName, setEditName] = useState('')
     const [editDeadline, setEditDeadline] = useState('')
     const [editPrice, setEditPrice] = useState('')
+    const [editDescription, setEditDescription] = useState('')
+    const [showEditDescModal, setShowEditDescModal] = useState(false)
     const [editSaving, setEditSaving] = useState(false)
 
     const openEdit = (task: TaskRow) => {
@@ -169,6 +273,7 @@ export default function TaskManagementPage() {
         setEditName(task.name)
         setEditDeadline(task.deadline ? task.deadline.slice(0, 10) : '')
         setEditPrice(task.price ? String(task.price) : '')
+        setEditDescription(task.description || '')
     }
 
     const handleEditSave = useCallback(async () => {
@@ -179,15 +284,18 @@ export default function TaskManagementPage() {
                 name: editName.trim(),
                 deadline: editDeadline || undefined,
                 price: parseCurrency(editPrice),
+                description: editDescription || undefined,
             })
             setTasks(prev => prev.map(t => t.id === editingTask.id ? updated : t))
             setEditingTask(null)
+            toast.success('Đã lưu thay đổi', editName.trim())
         } catch (e: unknown) {
             setError(e instanceof Error ? e.message : 'Lỗi cập nhật')
+            toast.error('Lỗi cập nhật', e instanceof Error ? e.message : 'Đã xảy ra lỗi')
         } finally {
             setEditSaving(false)
         }
-    }, [editingTask, editName, editDeadline, editPrice, editSaving])
+    }, [editingTask, editName, editDeadline, editPrice, editDescription, editSaving])
 
     /* ─── Smart Raw Input Parser ─── */
     const [rawInput, setRawInput] = useState('')
@@ -378,7 +486,21 @@ export default function TaskManagementPage() {
                             className="w-full bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary placeholder:text-text-muted"
                         />
                     </div>
-                    <div className="sm:col-span-2 md:col-span-3">
+                    {/* Description button */}
+                    <div className="flex items-end md:col-span-1">
+                        <button
+                            type="button"
+                            onClick={() => setShowDescModal(true)}
+                            className={`relative w-full h-[46px] rounded-xl border transition-all flex items-center justify-center gap-1.5 ${description ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-surface text-text-muted hover:border-primary/50 hover:text-primary'}`}
+                            title="Thêm mô tả"
+                        >
+                            <FiFileText className="text-base" />
+                            {description && (
+                                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-primary rounded-full border-2 border-surface" />
+                            )}
+                        </button>
+                    </div>
+                    <div className="sm:col-span-2 md:col-span-2">
                         <button
                             onClick={handleAddTask}
                             disabled={submitting || !name.trim()}
@@ -394,6 +516,14 @@ export default function TaskManagementPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Rich Text Description Modal */}
+            <RichTextEditorModal
+                open={showDescModal}
+                initialValue={description}
+                onSave={(html) => { setDescription(html); setShowDescModal(false) }}
+                onClose={() => setShowDescModal(false)}
+            />
 
             {/* Raw Input Modal */}
             {showRawModal && (
@@ -630,7 +760,7 @@ export default function TaskManagementPage() {
                 <div className="p-4 sm:p-6 border-b border-border space-y-3">
                     <div className="flex justify-between items-center">
                         <h3 className="font-semibold text-text-primary text-sm sm:text-base">Dự án đang hoạt động & Thanh toán</h3>
-                        <button onClick={loadTasks} className="text-text-muted hover:text-primary transition-colors">
+                        <button onClick={refreshTasks} className="text-text-muted hover:text-primary transition-colors">
                             <FiRefreshCw className="text-xl" />
                         </button>
                     </div>
@@ -657,6 +787,53 @@ export default function TaskManagementPage() {
                                 <option key={opt.value} value={opt.value}>{opt.label}</option>
                             ))}
                         </select>
+                    </div>
+                    {/* Date filters row */}
+                    <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+                        {/* Created date range */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-text-muted whitespace-nowrap">Ngày thêm:</span>
+                            <input
+                                type="date"
+                                value={createdFrom}
+                                onChange={e => setCreatedFrom(e.target.value)}
+                                className="bg-surface border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+                            />
+                            <span className="text-xs text-text-muted">→</span>
+                            <input
+                                type="date"
+                                value={createdTo}
+                                onChange={e => setCreatedTo(e.target.value)}
+                                className="bg-surface border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+                            />
+                        </div>
+                        {/* Deadline range */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-text-muted whitespace-nowrap">Deadline:</span>
+                            <input
+                                type="date"
+                                value={deadlineFrom}
+                                onChange={e => setDeadlineFrom(e.target.value)}
+                                className="bg-surface border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+                            />
+                            <span className="text-xs text-text-muted">→</span>
+                            <input
+                                type="date"
+                                value={deadlineTo}
+                                onChange={e => setDeadlineTo(e.target.value)}
+                                className="bg-surface border border-border rounded-lg px-2.5 py-1.5 text-xs text-text-primary outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+                            />
+                        </div>
+                        {/* Clear filters button */}
+                        {(createdFrom || createdTo || deadlineFrom || deadlineTo) && (
+                            <button
+                                onClick={() => { setCreatedFrom(''); setCreatedTo(''); setDeadlineFrom(''); setDeadlineTo('') }}
+                                className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-mid transition-colors cursor-pointer"
+                            >
+                                <FiX className="text-sm" />
+                                Xoá bộ lọc ngày
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -872,6 +1049,23 @@ export default function TaskManagementPage() {
                             </div>
                         </div>
 
+                        {/* Description button */}
+                        <div className="mt-4">
+                            <button
+                                type="button"
+                                onClick={() => setShowEditDescModal(true)}
+                                className="relative w-full flex items-center gap-2 px-4 py-3 bg-surface border border-border rounded-xl hover:border-primary/40 transition-all text-sm"
+                            >
+                                <FiFileText className="text-primary" />
+                                <span className={editDescription ? 'text-text-primary' : 'text-text-muted'}>
+                                    {editDescription ? 'Chỉnh sửa mô tả' : 'Thêm mô tả công việc'}
+                                </span>
+                                {editDescription && (
+                                    <span className="ml-auto w-2 h-2 rounded-full bg-primary" />
+                                )}
+                            </button>
+                        </div>
+
                         <div className="flex gap-3 mt-6">
                             <button
                                 onClick={() => setEditingTask(null)}
@@ -895,6 +1089,14 @@ export default function TaskManagementPage() {
                     </div>
                 </div>
             )}
+
+            {/* Rich text editor for edit modal description */}
+            <RichTextEditorModal
+                open={showEditDescModal}
+                initialValue={editDescription}
+                onSave={html => { setEditDescription(html); setShowEditDescModal(false) }}
+                onClose={() => setShowEditDescModal(false)}
+            />
         </>
     )
 }

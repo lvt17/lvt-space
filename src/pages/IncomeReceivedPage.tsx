@@ -1,10 +1,33 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Header from '@/components/layout/Header'
 
 import { incomeApi, type IncomeRow } from '@/services/api'
 import { parseCurrency, formatVND } from '@/utils/currency'
 
+function getCurrentMonthVN() {
+    const now = new Date()
+    const vnDate = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }))
+    return `${vnDate.getFullYear()}-${String(vnDate.getMonth() + 1).padStart(2, '0')}`
+}
+
+function generateMonthOptions(count = 12) {
+    const options: { value: string; label: string }[] = []
+    const now = new Date()
+    const vnNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }))
+    for (let i = 0; i < count; i++) {
+        const d = new Date(vnNow.getFullYear(), vnNow.getMonth() - i, 1)
+        const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+        const label = `Tháng ${d.getMonth() + 1}/${d.getFullYear()}`
+        options.push({ value, label })
+    }
+    return options
+}
+
 export default function IncomeReceivedPage() {
+    const currentMonth = useMemo(() => getCurrentMonthVN(), [])
+    const monthOptions = useMemo(() => generateMonthOptions(12), [])
+
+    const [selectedMonth, setSelectedMonth] = useState(currentMonth)
     const [records, setRecords] = useState<IncomeRow[]>([])
     const [totalCount, setTotalCount] = useState(0)
     const [page, setPage] = useState(1)
@@ -18,11 +41,13 @@ export default function IncomeReceivedPage() {
     const [category, setCategory] = useState('')
     const [amountInput, setAmountInput] = useState('')
 
+    const isCurrentMonth = selectedMonth === currentMonth
+
     const loadData = () => {
         setLoading(true)
         Promise.all([
-            incomeApi.list(page, limit),
-            incomeApi.monthlyTotal(),
+            incomeApi.list(page, limit, selectedMonth),
+            incomeApi.monthlyTotal(selectedMonth),
         ]).then(([pageData, monthly]) => {
             setRecords(pageData.records)
             setTotalCount(pageData.total)
@@ -30,7 +55,7 @@ export default function IncomeReceivedPage() {
         }).finally(() => setLoading(false))
     }
 
-    useEffect(() => { loadData() }, [page])
+    useEffect(() => { loadData() }, [page, selectedMonth])
 
     const totalPages = Math.ceil(totalCount / limit) || 1
 
@@ -67,14 +92,25 @@ export default function IncomeReceivedPage() {
                         <div className="relative z-10">
                             <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
                                 <div>
-                                    <p className="text-text-muted text-xs sm:text-sm font-medium mb-1 uppercase tracking-wider">
-                                        Tổng thu nhập tháng này
-                                    </p>
+                                    <div className="flex items-center gap-3 mb-1">
+                                        <p className="text-text-muted text-xs sm:text-sm font-medium uppercase tracking-wider">
+                                            {isCurrentMonth ? 'Tổng thu nhập tháng này' : `Tổng thu nhập ${monthOptions.find(o => o.value === selectedMonth)?.label || ''}`}
+                                        </p>
+                                        <select
+                                            value={selectedMonth}
+                                            onChange={e => { setSelectedMonth(e.target.value); setPage(1) }}
+                                            className="bg-surface border border-border rounded-lg px-2.5 py-1 text-xs font-semibold text-text-primary outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+                                        >
+                                            {monthOptions.map(opt => (
+                                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                     <h3 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-text-primary">
                                         {formatVND(monthlyTotal)}
                                     </h3>
                                     <p className="text-text-muted text-xs sm:text-sm mt-2">
-                                        {totalCount} bản ghi tổng cộng
+                                        {totalCount} bản ghi {isCurrentMonth ? 'tháng này' : ''}
                                     </p>
                                 </div>
                                 <button

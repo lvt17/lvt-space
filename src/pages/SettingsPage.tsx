@@ -479,16 +479,30 @@ export default function SettingsPage() {
                                         <h3 className="font-bold text-base text-text-primary">Lịch sử cập nhật</h3>
                                         <p className="text-xs text-text-muted">Các tính năng mới và cải tiến</p>
                                     </div>
-                                    <span className="ml-auto text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">v1.2.0</span>
+                                    <span className="ml-auto text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">v1.3.0</span>
                                 </div>
 
                                 <div className="space-y-0">
                                     {[
                                         {
-                                            version: 'v1.2.0',
-                                            date: '13/03/2026',
+                                            version: 'v1.3.0',
+                                            date: '15/03/2026',
                                             tag: 'Mới nhất',
                                             tagColor: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                                            changes: [
+                                                'Hệ thống thông báo Toast + chuông thông báo',
+                                                'Nhắc nhở deadline tự động (trước 1 ngày & đúng hạn)',
+                                                'Mô tả chi tiết cho từng task với Rich Text Editor',
+                                                'Xem mô tả trực tiếp từ Notes Board',
+                                                'Badge version + popup changelog tính năng mới',
+                                                'Cải thiện tốc độ xử lý và UX/UI',
+                                            ],
+                                        },
+                                        {
+                                            version: 'v1.2.0',
+                                            date: '13/03/2026',
+                                            tag: '',
+                                            tagColor: '',
                                             changes: [
                                                 'Đăng nhập bằng Google & GitHub',
                                                 'Dark mode cải tiến — bảng màu Đơn sắc premium',
@@ -525,7 +539,7 @@ export default function SettingsPage() {
                                     ].map((release, idx) => (
                                         <div key={release.version} className="relative pl-6 pb-6 last:pb-0">
                                             {/* Timeline line */}
-                                            {idx < 2 && <div className="absolute left-[0.4375rem] top-3 bottom-0 w-0.5 bg-border" />}
+                                            {idx < 3 && <div className="absolute left-[0.4375rem] top-3 bottom-0 w-0.5 bg-border" />}
                                             {/* Timeline dot */}
                                             <div className={`absolute left-0 top-1.5 w-4 h-4 rounded-full border-2 ${idx === 0 ? 'bg-primary border-primary' : 'bg-surface border-border'}`} />
 
@@ -642,7 +656,7 @@ export default function SettingsPage() {
                                 {/* About */}
                                 <div className="glass-card rounded-2xl md:rounded-3xl px-6 sm:px-8 py-7">
                                     <div className="max-w-lg mx-auto">
-                                        <p className="text-xs font-bold text-primary tracking-wide text-center">LVT SPACE · v1.2.0</p>
+                                        <p className="text-xs font-bold text-primary tracking-wide text-center">LVT SPACE · v1.3.0</p>
 
                                         <p className="text-sm text-text-secondary mt-4 leading-relaxed">
                                             Lvt Space là một Workspace Suite được thiết kế để giúp bạn tổ chức công việc, theo dõi thu nhập và ghi chú ý tưởng — tất cả trong một giao diện duy nhất, tối giản và hiện đại.

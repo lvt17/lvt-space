@@ -8,6 +8,7 @@
         "dev:client": "vite",
         "dev:server": "tsx server/index.ts",
         "migrate": "tsx server/migrate.ts",
+        "migrate:pat": "tsx server/migrate-pat.ts",
         "build": "tsc -b && vite build",
         "preview": "vite preview"
     },

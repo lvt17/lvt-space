@@ -1,40 +1,27 @@
-import { useState, useEffect } from 'react'
 import Header from '@/components/layout/Header'
 import StatCard from '@/components/ui/StatCard'
 import IncomeChart from '@/components/charts/IncomeChart'
-import { dashboardApi, type DashboardStats, type PerformanceRow } from '@/services/api'
 import { formatVND } from '@/utils/currency'
+import { useDataCache } from '@/contexts/DataCacheContext'
 import type { StatCardData } from '@/types'
 
 export default function DashboardPage() {
-    const [stats, setStats] = useState<DashboardStats | null>(null)
-    const [performance, setPerformance] = useState<PerformanceRow[]>([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState('')
-
-    useEffect(() => {
-        Promise.all([dashboardApi.stats(), dashboardApi.performance()])
-            .then(([s, p]) => { setStats(s); setPerformance(p) })
-            .catch(err => setError(err.message))
-            .finally(() => setLoading(false))
-    }, [])
+    const { dashboardStats: stats, dashboardPerformance: performance, dashboardLoading: loading } = useDataCache()
 
     const cards: StatCardData[] = stats
         ? [
             { title: 'Tổng thu nhập tháng này', value: formatVND(stats.monthlyTotalIncome), icon: 'account_balance_wallet' },
-            { title: 'Đã nhận', value: formatVND(stats.totalIncome), icon: 'savings' },
+            { title: 'Đã nhận tháng này', value: formatVND(stats.totalIncome), icon: 'savings' },
             { title: 'Chưa thanh toán', value: formatVND(stats.unpaidTotal), icon: 'hourglass_top' },
             { title: 'Hoàn thành', value: `${stats.completionRate}%`, subtitle: `${stats.completedTasks}/${stats.totalTasks}`, icon: 'check_circle' },
         ]
         : []
 
-    if (error) return <div className="text-red-500 p-4 lg:p-8">Lỗi: {error}</div>
-
     return (
         <>
             <Header title="Dashboard" />
 
-            {loading ? (
+            {loading && !stats ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                     <div className="w-8 h-8 border-3 border-primary/20 border-t-primary rounded-full animate-spin" />
                     <span className="text-sm text-text-muted">Đang tải...</span>

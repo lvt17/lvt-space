@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react'
 import { checklistApi, aiApi, dailyTaskApi, taskApi, type ChecklistRow, type ChecklistItem, type DailyTaskRow, type TaskRow } from '@/services/api'
+import { useDataCache } from '@/contexts/DataCacheContext'
 import { FiPlus, FiMinus } from 'react-icons/fi'
 
-import { MdMyLocation, MdToday, MdAssignment, MdDateRange } from 'react-icons/md'
+import { MdMyLocation, MdToday, MdAssignment, MdDateRange, MdDescription } from 'react-icons/md'
 import { useTheme } from '@/contexts/ThemeContext'
 
 const CANVAS_SIZE = 50000
@@ -37,14 +38,14 @@ function getColor(name: string, dark: boolean) {
 }
 
 /* ─── Sticky Note Component ─── */
-function StickyNote({ checklist, onUpdate, onDelete, dark }: {
+const StickyNote = memo(function StickyNote({ checklist, onUpdate, onDelete, dark }: {
     checklist: ChecklistRow
     onUpdate: (id: string, data: Partial<ChecklistRow>) => void
     onDelete: (id: string) => void
     dark: boolean
 }) {
     const color = getColor(checklist.color, dark)
-    const items = checklist.items || []
+    const [localItems, setLocalItems] = useState<ChecklistItem[]>(checklist.items || [])
     const [newText, setNewText] = useState('')
     const [editingTitle, setEditingTitle] = useState(false)
     const [title, setTitle] = useState(checklist.title)
@@ -53,6 +54,45 @@ function StickyNote({ checklist, onUpdate, onDelete, dark }: {
     const resizeRef = useRef<{ startX: number; startY: number; origW: number; origH: number; origX: number; origY: number; corner: string } | null>(null)
     const noteRef = useRef<HTMLDivElement>(null)
     const [localSize, setLocalSize] = useState<{ w: number; h: number } | null>(null)
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    // Per-item description note state — persisted in localStorage
+    const descStorageKey = `open_item_descs_${checklist.id}`
+    const [openDescItems, setOpenDescItems] = useState<Set<string>>(() => {
+        try {
+            const saved = localStorage.getItem(descStorageKey)
+            if (saved) return new Set(JSON.parse(saved) as string[])
+        } catch { /* ignore */ }
+        return new Set()
+    })
+    const [descPositions, setDescPositions] = useState<Record<string, { x: number; y: number }>>({})
+    const [localPos, setLocalPos] = useState({ x: checklist.pos_x + CENTER_OFFSET, y: checklist.pos_y + CENTER_OFFSET })
+
+    // Sync localPos when server data changes
+    useEffect(() => { setLocalPos({ x: checklist.pos_x + CENTER_OFFSET, y: checklist.pos_y + CENTER_OFFSET }) }, [checklist.pos_x, checklist.pos_y])
+
+    const toggleItemDesc = useCallback((itemId: string) => {
+        setOpenDescItems(prev => {
+            const next = new Set(prev)
+            if (next.has(itemId)) next.delete(itemId); else next.add(itemId)
+            localStorage.setItem(descStorageKey, JSON.stringify([...next]))
+            return next
+        })
+    }, [descStorageKey])
+
+    const handleDescPosChange = useCallback((itemId: string, p: { x: number; y: number }) => {
+        setDescPositions(prev => ({ ...prev, [itemId]: p }))
+    }, [])
+
+    const handleItemDescSave = useCallback((itemId: string, html: string) => {
+        const newItems = localItems.map(i => i.id === itemId ? { ...i, description: html } : i)
+        setLocalItems(newItems)
+        onUpdate(checklist.id, { items: newItems })
+    }, [localItems, checklist.id, onUpdate])
+
+    // Sync from server when checklist.items changes externally
+    useEffect(() => { setLocalItems(checklist.items || []) }, [checklist.items])
+    useEffect(() => { setTitle(checklist.title) }, [checklist.title])
 
     const noteW = localSize?.w ?? checklist.width ?? 272
     const noteH = localSize?.h ?? checklist.height ?? undefined
@@ -62,15 +102,20 @@ function StickyNote({ checklist, onUpdate, onDelete, dark }: {
     const MIN_H = 120
     const fontScale = noteW / BASE_W
 
-    const checked = items.filter(i => i.is_checked).length
-    const total = items.length
+    const checked = localItems.filter(i => i.is_checked).length
+    const total = localItems.length
 
-    const saveItems = useCallback((newItems: ChecklistItem[]) => {
-        onUpdate(checklist.id, { items: newItems })
+    // Debounced save — local state updates instantly, API call after 500ms idle
+    const debouncedSaveItems = useCallback((newItems: ChecklistItem[]) => {
+        setLocalItems(newItems)
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = setTimeout(() => {
+            onUpdate(checklist.id, { items: newItems })
+        }, 500)
     }, [checklist.id, onUpdate])
 
     const toggleItem = (itemId: string) => {
-        saveItems(items.map(i => i.id === itemId ? { ...i, is_checked: !i.is_checked } : i))
+        debouncedSaveItems(localItems.map(i => i.id === itemId ? { ...i, is_checked: !i.is_checked } : i))
     }
 
     const addItem = () => {
@@ -81,12 +126,12 @@ function StickyNote({ checklist, onUpdate, onDelete, dark }: {
             is_checked: false,
             indent_level: 0,
         }
-        saveItems([...items, newItem])
+        debouncedSaveItems([...localItems, newItem])
         setNewText('')
     }
 
     const removeItem = (itemId: string) => {
-        saveItems(items.filter(i => i.id !== itemId))
+        debouncedSaveItems(localItems.filter(i => i.id !== itemId))
     }
 
     const saveTitle = () => {
@@ -97,6 +142,8 @@ function StickyNote({ checklist, onUpdate, onDelete, dark }: {
     }
 
     /* ─── Drag logic ─── */
+    const EDGE_ZONE = 12 // px from border that counts as draggable
+
     const onDragStart = (e: React.PointerEvent) => {
         e.preventDefault()
         e.stopPropagation()
@@ -106,18 +153,29 @@ function StickyNote({ checklist, onUpdate, onDelete, dark }: {
             origX: checklist.pos_x + CENTER_OFFSET,
             origY: checklist.pos_y + CENTER_OFFSET,
         }
-        // Bring to front
         if (noteRef.current) noteRef.current.style.zIndex = '999'
         document.addEventListener('pointermove', onDragMove)
         document.addEventListener('pointerup', onDragEnd)
+    }
+
+    const onEdgeDrag = (e: React.PointerEvent) => {
+        if (!noteRef.current) return
+        const rect = noteRef.current.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        const nearEdge = x < EDGE_ZONE || x > rect.width - EDGE_ZONE || y < EDGE_ZONE || y > rect.height - EDGE_ZONE
+        if (nearEdge) onDragStart(e)
     }
 
     const onDragMove = useCallback((e: PointerEvent) => {
         if (!dragRef.current || !noteRef.current) return
         const dx = e.clientX - dragRef.current.startX
         const dy = e.clientY - dragRef.current.startY
-        noteRef.current.style.left = `${dragRef.current.origX + dx}px`
-        noteRef.current.style.top = `${dragRef.current.origY + dy}px`
+        const newX = dragRef.current.origX + dx
+        const newY = dragRef.current.origY + dy
+        noteRef.current.style.left = `${newX}px`
+        noteRef.current.style.top = `${newY}px`
+        setLocalPos({ x: newX, y: newY })
     }, [])
 
     const onDragEnd = useCallback((e: PointerEvent) => {
@@ -186,12 +244,17 @@ function StickyNote({ checklist, onUpdate, onDelete, dark }: {
 
     const resizeHandleClass = 'absolute w-3 h-3 rounded-full opacity-0 z-10 cursor-pointer'
 
+    const noteX = localPos.x
+    const noteY = localPos.y
+
     return (
+        <>
         <div
             ref={noteRef}
             data-sticky-note
+            onPointerDown={onEdgeDrag}
             className={`absolute ${color.bg} ${color.border} border-2 rounded-xl shadow-lg select-none transition-shadow hover:shadow-xl group flex flex-col`}
-            style={{ left: checklist.pos_x + CENTER_OFFSET, top: checklist.pos_y + CENTER_OFFSET, width: noteW, ...(noteH ? { height: noteH } : {}) }}
+            style={{ left: noteX, top: noteY, width: noteW, ...(noteH ? { height: noteH } : {}) }}
         >
             {/* Resize handles — 4 corners */}
             <div onPointerDown={onResizeStart('tl')} className={`${resizeHandleClass} ${color.border} -top-1.5 -left-1.5 cursor-nwse-resize`} />
@@ -201,8 +264,8 @@ function StickyNote({ checklist, onUpdate, onDelete, dark }: {
 
             {/* Zoomed inner content */}
             <div className="flex flex-col flex-1 min-h-0 origin-top-left" style={{ zoom: fontScale }}>
-                {/* Header with drag handle */}
-                <div className={`${color.header} rounded-t-[0.625rem] px-3 py-2 flex items-center gap-2`}>
+                {/* Header = drag handle */}
+                <div onPointerDown={onDragStart} className={`${color.header} rounded-t-[0.625rem] px-3 py-2 flex items-center gap-2 cursor-grab active:cursor-grabbing`}>
                     {/* Color dot */}
                     <button
                         onClick={() => setShowColorPicker(!showColorPicker)}
@@ -262,7 +325,7 @@ function StickyNote({ checklist, onUpdate, onDelete, dark }: {
 
                 {/* Checklist items */}
                 <div className="px-3 py-2 space-y-0.5 overflow-y-auto flex-1" style={{ maxHeight: noteH ? undefined : '20rem' }}>
-                    {items.map(item => (
+                    {localItems.map((item, idx) => (
                         <div
                             key={item.id}
                             className="flex items-start gap-1.5 group py-0.5"
@@ -277,6 +340,13 @@ function StickyNote({ checklist, onUpdate, onDelete, dark }: {
                             <span className={`text-xs leading-snug flex-1 ${item.is_checked ? 'line-through text-text-muted/60' : 'text-text-primary'}`}>
                                 {item.text}
                             </span>
+                            <button
+                                onClick={() => toggleItemDesc(item.id)}
+                                className={`opacity-0 group-hover:opacity-100 shrink-0 w-4 h-4 rounded flex items-center justify-center transition-all ${openDescItems.has(item.id) ? 'opacity-100 ' + color.text : 'text-text-muted/40 hover:text-text-primary'}`}
+                                title="Mô tả"
+                            >
+                                <MdDescription className="text-[0.6rem]" />
+                            </button>
                             <button
                                 onClick={() => removeItem(item.id)}
                                 className="opacity-0 group-hover:opacity-100 text-text-muted/40 hover:text-red-500 transition-all shrink-0"
@@ -309,11 +379,323 @@ function StickyNote({ checklist, onUpdate, onDelete, dark }: {
                 )}
             </div>{/* end zoomed inner content */}
         </div>
+
+        {/* SVG connecting lines to per-item description notes */}
+        {localItems.filter(i => openDescItems.has(i.id)).map((item, idx) => {
+            const dp = descPositions[item.id]
+            if (!dp) return null
+            return (
+                <svg key={`line-${item.id}`} className="absolute inset-0 pointer-events-none" style={{ zIndex: 1, width: '100%', height: '100%' }}>
+                    <line
+                        x1={noteX + noteW}
+                        y1={noteY + 50 + idx * 22}
+                        x2={dp.x + 200}
+                        y2={dp.y + 18}
+                        stroke={dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)'}
+                        strokeWidth={1.5}
+                        strokeDasharray="6 4"
+                    />
+                </svg>
+            )
+        })}
+
+        {/* Per-item Description Notes */}
+        {localItems.filter(i => openDescItems.has(i.id)).map((item, idx) => (
+            <DescNote
+                key={`desc-item-${item.id}`}
+                id={item.id}
+                name={item.text}
+                description={item.description ?? null}
+                onSave={handleItemDescSave}
+                onClose={() => toggleItemDesc(item.id)}
+                sourcePos={{ x: noteX + noteW + 20, y: noteY + idx * 60 }}
+                colorIndex={(item.id.charCodeAt(item.id.length - 1) + idx) % COLORS_LIGHT.length}
+                onPosChange={handleDescPosChange}
+            />
+        ))}
+        </>
     )
-}
+})
+
+/* ─── Text Note Component (Rich Text) ─── */
+const FONTS_LIST = [
+    { label: 'Mặc định', value: 'inherit' },
+    { label: 'Inter', value: 'Inter' },
+    { label: 'Roboto', value: 'Roboto' },
+    { label: 'Serif', value: 'Georgia, serif' },
+    { label: 'Mono', value: 'monospace' },
+]
+
+const TextNote = memo(function TextNote({ checklist, onUpdate, onDelete, dark }: {
+    checklist: ChecklistRow
+    onUpdate: (id: string, data: Partial<ChecklistRow>) => void
+    onDelete: (id: string) => void
+    dark: boolean
+}) {
+    const color = getColor(checklist.color, dark)
+    const [editingTitle, setEditingTitle] = useState(false)
+    const [title, setTitle] = useState(checklist.title)
+    const [showColorPicker, setShowColorPicker] = useState(false)
+    const [focused, setFocused] = useState(false)
+    const editorRef = useRef<HTMLDivElement>(null)
+    const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
+    const resizeRef = useRef<{ startX: number; startY: number; origW: number; origH: number; origX: number; origY: number; corner: string } | null>(null)
+    const noteRef = useRef<HTMLDivElement>(null)
+    const [localSize, setLocalSize] = useState<{ w: number; h: number } | null>(null)
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    useEffect(() => { setTitle(checklist.title) }, [checklist.title])
+
+    // Init editor content from checklist
+    const initializedRef = useRef(false)
+    useEffect(() => {
+        if (editorRef.current && !initializedRef.current) {
+            editorRef.current.innerHTML = checklist.content || ''
+            initializedRef.current = true
+        }
+    }, [checklist.content])
+
+    const noteW = localSize?.w ?? checklist.width ?? 272
+    const noteH = localSize?.h ?? checklist.height ?? undefined
+    const MIN_W = 200
+    const MAX_W = 600
+    const MIN_H = 120
+
+    const debouncedSaveContent = useCallback(() => {
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = setTimeout(() => {
+            if (editorRef.current) {
+                onUpdate(checklist.id, { content: editorRef.current.innerHTML })
+            }
+        }, 500)
+    }, [checklist.id, onUpdate])
+
+    const saveTitle = () => {
+        setEditingTitle(false)
+        if (title.trim() !== checklist.title) {
+            onUpdate(checklist.id, { title: title.trim() || 'Untitled' })
+        }
+    }
+
+    const exec = useCallback((cmd: string, value?: string) => {
+        document.execCommand(cmd, false, value)
+        editorRef.current?.focus()
+        debouncedSaveContent()
+    }, [debouncedSaveContent])
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'b' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); exec('bold') }
+        if (e.key === 'i' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); exec('italic') }
+        if (e.key === 'u' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); exec('underline') }
+    }
+
+    const handleImageUpload = () => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = 'image/*'
+        input.onchange = (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0]
+            if (!file) return
+            const reader = new FileReader()
+            reader.onload = () => {
+                exec('insertImage', reader.result as string)
+            }
+            reader.readAsDataURL(file)
+        }
+        input.click()
+    }
+
+    /* ─── Drag logic ─── */
+    const EDGE_ZONE = 12
+    const onDragStart = (e: React.PointerEvent) => {
+        e.preventDefault(); e.stopPropagation()
+        dragRef.current = { startX: e.clientX, startY: e.clientY, origX: parseInt(noteRef.current!.style.left), origY: parseInt(noteRef.current!.style.top) }
+        if (noteRef.current) noteRef.current.style.zIndex = '999'
+        const onMove = (ev: PointerEvent) => {
+            if (!dragRef.current || !noteRef.current) return
+            noteRef.current.style.left = `${dragRef.current.origX + (ev.clientX - dragRef.current.startX)}px`
+            noteRef.current.style.top = `${dragRef.current.origY + (ev.clientY - dragRef.current.startY)}px`
+        }
+        const onUp = (ev: PointerEvent) => {
+            if (!dragRef.current) return
+            const newX = dragRef.current.origX + (ev.clientX - dragRef.current.startX)
+            const newY = dragRef.current.origY + (ev.clientY - dragRef.current.startY)
+            dragRef.current = null
+            if (noteRef.current) noteRef.current.style.zIndex = ''
+            document.removeEventListener('pointermove', onMove)
+            document.removeEventListener('pointerup', onUp)
+            onUpdate(checklist.id, { pos_x: newX - CENTER_OFFSET, pos_y: newY - CENTER_OFFSET })
+        }
+        document.addEventListener('pointermove', onMove)
+        document.addEventListener('pointerup', onUp)
+    }
+
+    const onEdgeDrag = (e: React.PointerEvent) => {
+        if (!noteRef.current) return
+        const rect = noteRef.current.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        const nearEdge = x < EDGE_ZONE || x > rect.width - EDGE_ZONE || y < EDGE_ZONE || y > rect.height - EDGE_ZONE
+        if (nearEdge) onDragStart(e)
+    }
+
+    /* ─── Resize ─── */
+    const resizeHandleClass = 'absolute w-4 h-4 border-2 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity z-10'
+    const onResizeStart = (corner: string) => (e: React.PointerEvent) => {
+        e.stopPropagation(); e.preventDefault()
+        const rect = noteRef.current!.getBoundingClientRect()
+        resizeRef.current = { startX: e.clientX, startY: e.clientY, origW: noteW, origH: rect.height, origX: parseInt(noteRef.current!.style.left), origY: parseInt(noteRef.current!.style.top), corner }
+        const onMove = (ev: PointerEvent) => {
+            if (!resizeRef.current) return
+            const dx = ev.clientX - resizeRef.current.startX
+            const dy = ev.clientY - resizeRef.current.startY
+            let newW = resizeRef.current.origW
+            let newH = resizeRef.current.origH
+            if (corner.includes('r')) newW = Math.min(MAX_W, Math.max(MIN_W, resizeRef.current.origW + dx))
+            if (corner.includes('l')) newW = Math.min(MAX_W, Math.max(MIN_W, resizeRef.current.origW - dx))
+            if (corner.includes('b')) newH = Math.max(MIN_H, resizeRef.current.origH + dy)
+            if (corner.includes('t')) newH = Math.max(MIN_H, resizeRef.current.origH - dy)
+            setLocalSize({ w: newW, h: newH })
+        }
+        const onUp = () => {
+            if (!resizeRef.current) return
+            const sz = localSize ?? { w: noteW, h: noteRef.current?.getBoundingClientRect().height ?? 200 }
+            resizeRef.current = null
+            document.removeEventListener('pointermove', onMove)
+            document.removeEventListener('pointerup', onUp)
+            onUpdate(checklist.id, { width: sz.w, height: sz.h })
+        }
+        document.addEventListener('pointermove', onMove)
+        document.addEventListener('pointerup', onUp)
+    }
+
+    const handleFocus = () => setFocused(true)
+    const handleBlur = (e: React.FocusEvent) => {
+        // Don't blur if clicking toolbar
+        const related = e.relatedTarget as HTMLElement | null
+        if (related && (related.closest('.text-note-toolbar') || related.closest('[data-text-note-toolbar]'))) return
+        setFocused(false)
+        debouncedSaveContent()
+    }
+
+    return (
+        <div
+            ref={noteRef}
+            data-sticky-note
+            onPointerDown={onEdgeDrag}
+            className={`absolute ${color.bg} ${color.border} border-2 rounded-xl shadow-lg select-none transition-shadow hover:shadow-xl group flex flex-col`}
+            style={{ left: checklist.pos_x + CENTER_OFFSET, top: checklist.pos_y + CENTER_OFFSET, width: noteW, ...(noteH ? { height: noteH } : {}) }}
+        >
+            {/* Resize handles */}
+            <div onPointerDown={onResizeStart('tl')} className={`${resizeHandleClass} ${color.border} -top-1.5 -left-1.5 cursor-nwse-resize`} />
+            <div onPointerDown={onResizeStart('tr')} className={`${resizeHandleClass} ${color.border} -top-1.5 -right-1.5 cursor-nesw-resize`} />
+            <div onPointerDown={onResizeStart('bl')} className={`${resizeHandleClass} ${color.border} -bottom-1.5 -left-1.5 cursor-nesw-resize`} />
+            <div onPointerDown={onResizeStart('br')} className={`${resizeHandleClass} ${color.border} -bottom-1.5 -right-1.5 cursor-nwse-resize`} />
+
+            {/* Header = drag handle */}
+            <div onPointerDown={onDragStart} className={`${color.header} rounded-t-[0.625rem] px-3 py-2 flex items-center gap-2 cursor-grab active:cursor-grabbing`}>
+                {/* Color dot */}
+                <button
+                    onClick={() => setShowColorPicker(!showColorPicker)}
+                    className={`w-3.5 h-3.5 rounded-full ${color.accent} shrink-0 hover:ring-2 ${color.ring} transition-all`}
+                />
+                {/* Title */}
+                {editingTitle ? (
+                    <input
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                        onBlur={saveTitle}
+                        onKeyDown={e => e.key === 'Enter' && saveTitle()}
+                        autoFocus
+                        className="flex-1 text-sm font-bold bg-transparent outline-none text-text-primary min-w-0"
+                    />
+                ) : (
+                    <h3
+                        className="flex-1 text-sm font-bold text-text-primary truncate cursor-text"
+                        onDoubleClick={() => setEditingTitle(true)}
+                    >
+                        {checklist.title}
+                    </h3>
+                )}
+                <span className={`text-[0.55rem] font-semibold ${color.text} bg-white/30 px-1.5 py-0.5 rounded`}>TEXT</span>
+                {/* Pin */}
+                <button
+                    onPointerDown={onDragStart}
+                    onDoubleClick={(e) => { e.stopPropagation(); onDelete(checklist.id) }}
+                    className="group/pin w-10 h-10 flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0 transition-all"
+                    title="Kéo để di chuyển • Nhấn 2 lần để xóa"
+                >
+                    <img src="/pin-normal.png" alt="pin" className="w-full h-full object-contain block group-active/pin:hidden transition-transform duration-200 scale-90 group-hover/pin:scale-100 group-hover/pin:translate-x-[4px] group-hover/pin:translate-y-[-4px]" />
+                    <img src="/pin-active.png" alt="pin" className="w-full h-full object-contain hidden group-active/pin:block group-active/pin:translate-x-[25px] group-active/pin:translate-y-[-18px] transition-transform duration-150" style={{ filter: 'drop-shadow(3px 6px 4px rgba(0,0,0,0.4))' }} />
+                </button>
+            </div>
+
+            {/* Color picker dropdown */}
+            {showColorPicker && (
+                <div className="px-3 py-2 flex gap-1.5 border-b border-border/30">
+                    {(dark ? COLORS_DARK : COLORS_LIGHT).map(c => (
+                        <button
+                            key={c.name}
+                            onClick={() => { onUpdate(checklist.id, { color: c.name }); setShowColorPicker(false) }}
+                            className={`w-5 h-5 rounded-full ${c.accent} transition-all ${checklist.color === c.name ? 'ring-2 ring-offset-1 ring-gray-400 scale-110' : 'hover:scale-110'}`}
+                        />
+                    ))}
+                </div>
+            )}
+
+            {/* ContentEditable area */}
+            <div className="flex-1 min-h-0 relative">
+                <div
+                    ref={editorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={debouncedSaveContent}
+                    onKeyDown={handleKeyDown}
+                    onFocus={handleFocus}
+                    onBlur={handleBlur}
+                    className="px-3 py-2 text-xs text-text-primary outline-none overflow-y-auto prose prose-sm max-w-none"
+                    style={{ minHeight: '4rem', maxHeight: noteH ? undefined : '18rem', lineHeight: '1.5' }}
+                    data-placeholder="Nhập nội dung..."
+                />
+            </div>
+
+            {/* Floating Toolbar — appears on focus, positioned below note */}
+            {focused && (
+                <div
+                    data-text-note-toolbar
+                    className="text-note-toolbar absolute -bottom-12 left-0 z-50 flex items-center gap-1 px-2 py-1.5 rounded-lg shadow-xl border border-border bg-surface/95 backdrop-blur-sm"
+                    onMouseDown={e => e.preventDefault()}
+                >
+                    <button onClick={() => exec('bold')} className="w-7 h-7 rounded flex items-center justify-center hover:bg-primary/10 text-text-primary" title="Bold (Ctrl+B)">
+                        <span className="text-xs font-bold">B</span>
+                    </button>
+                    <button onClick={() => exec('italic')} className="w-7 h-7 rounded flex items-center justify-center hover:bg-primary/10 text-text-primary" title="Italic (Ctrl+I)">
+                        <span className="text-xs italic">I</span>
+                    </button>
+                    <button onClick={() => exec('underline')} className="w-7 h-7 rounded flex items-center justify-center hover:bg-primary/10 text-text-primary" title="Underline (Ctrl+U)">
+                        <span className="text-xs underline">U</span>
+                    </button>
+                    <div className="w-px h-5 bg-border mx-0.5" />
+                    <select
+                        onChange={e => { if (editorRef.current) editorRef.current.style.fontFamily = e.target.value }}
+                        className="text-[0.6rem] bg-transparent border border-border rounded px-1 py-0.5 text-text-primary outline-none"
+                        onMouseDown={e => e.stopPropagation()}
+                    >
+                        {FONTS_LIST.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                    </select>
+                    <div className="w-px h-5 bg-border mx-0.5" />
+                    <button onClick={handleImageUpload} className="w-7 h-7 rounded flex items-center justify-center hover:bg-primary/10 text-text-primary" title="Thêm hình ảnh">
+                        <span className="material-icons-round text-xs">image</span>
+                    </button>
+                </div>
+            )}
+        </div>
+    )
+})
+
 
 /* ─── Daily Tasks Fixed Container (Red Pastel, Premium) ─── */
-function DailyTasksNote({ tasks, todayStr, onToggle }: { tasks: DailyTaskRow[]; todayStr: string; onToggle: (id: string) => void }) {
+const DailyTasksNote = memo(function DailyTasksNote({ tasks, todayStr, onToggle }: { tasks: DailyTaskRow[]; todayStr: string; onToggle: (id: string) => void }) {
     const checked = tasks.filter(t => t.is_completed).length
     const total = tasks.length
     const pct = total > 0 ? Math.round((checked / total) * 100) : 0
@@ -322,18 +704,16 @@ function DailyTasksNote({ tasks, todayStr, onToggle }: { tasks: DailyTaskRow[]; 
     /* Drag logic (same as StickyNote, but no delete) */
     const noteRef = useRef<HTMLDivElement>(null)
     const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
-    const [pos, setPos] = useState({ x: 100 + CENTER_OFFSET, y: 100 + CENTER_OFFSET })
-
-    // Persist position in localStorage
-    useEffect(() => {
-        const saved = localStorage.getItem('daily_note_pos')
-        if (saved) {
-            try {
+    const [pos, setPos] = useState(() => {
+        try {
+            const saved = localStorage.getItem('daily_note_pos')
+            if (saved) {
                 const p = JSON.parse(saved)
-                setPos({ x: p.x + CENTER_OFFSET, y: p.y + CENTER_OFFSET })
-            } catch { /* ignore */ }
-        }
-    }, [])
+                return { x: p.x + CENTER_OFFSET, y: p.y + CENTER_OFFSET }
+            }
+        } catch { /* fallback */ }
+        return { x: 100 + CENTER_OFFSET, y: 100 + CENTER_OFFSET }
+    })
 
     const savePosToStorage = useCallback((x: number, y: number) => {
         localStorage.setItem('daily_note_pos', JSON.stringify({ x: x - CENTER_OFFSET, y: y - CENTER_OFFSET }))
@@ -370,11 +750,22 @@ function DailyTasksNote({ tasks, todayStr, onToggle }: { tasks: DailyTaskRow[]; 
         savePosToStorage(newX, newY)
     }, [onDragMove, savePosToStorage])
 
+    const EDGE_ZONE = 12
+    const onEdgeDrag = (e: React.PointerEvent) => {
+        if (!noteRef.current) return
+        const rect = noteRef.current.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        const nearEdge = x < EDGE_ZONE || x > rect.width - EDGE_ZONE || y < EDGE_ZONE || y > rect.height - EDGE_ZONE
+        if (nearEdge) onDragStart(e)
+    }
+
     return (
         <div
             ref={noteRef}
             data-sticky-note
-            className="absolute rounded-2xl shadow-lg select-none transition-all hover:shadow-xl group"
+            onPointerDown={onEdgeDrag}
+            className="absolute rounded-2xl shadow-lg select-none transition-shadow hover:shadow-xl group"
             style={{
                 left: pos.x,
                 top: pos.y,
@@ -384,9 +775,10 @@ function DailyTasksNote({ tasks, todayStr, onToggle }: { tasks: DailyTaskRow[]; 
                 boxShadow: '0 4px 24px rgba(244, 63, 94, 0.08), 0 0 0 1px rgba(251, 113, 133, 0.1)',
             }}
         >
-            {/* Premium header with gradient */}
+            {/* Premium header = drag handle */}
             <div
-                className="rounded-t-[0.875rem] px-3.5 py-2.5 flex items-center gap-2"
+                onPointerDown={onDragStart}
+                className="rounded-t-[0.875rem] px-3.5 py-2.5 flex items-center gap-2 cursor-grab active:cursor-grabbing"
                 style={{ background: 'linear-gradient(135deg, #FFE4E6 0%, #FECDD3 100%)' }}
             >
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #FB7185, #F43F5E)' }}>
@@ -461,18 +853,26 @@ function DailyTasksNote({ tasks, todayStr, onToggle }: { tasks: DailyTaskRow[]; 
             )}
         </div>
     )
-}
+})
 
 /* ─── Shared draggable note hook ─── */
-function useDraggableNote(storageKey: string, defaultX: number, defaultY: number) {
+function useDraggableNote(storageKey: string, defaultX: number, defaultY: number, onMove?: (p: { x: number; y: number }) => void) {
     const noteRef = useRef<HTMLDivElement>(null)
     const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
-    const [pos, setPos] = useState({ x: defaultX + CENTER_OFFSET, y: defaultY + CENTER_OFFSET })
-
-    useEffect(() => {
-        const saved = localStorage.getItem(storageKey)
-        if (saved) { try { const p = JSON.parse(saved); setPos({ x: p.x + CENTER_OFFSET, y: p.y + CENTER_OFFSET }) } catch { /* */ } }
-    }, [storageKey])
+    const [pos, setPos] = useState(() => {
+        // Initialize from localStorage synchronously to prevent position jump
+        try {
+            const saved = localStorage.getItem(storageKey)
+            if (saved) {
+                const p = JSON.parse(saved)
+                return { x: p.x + CENTER_OFFSET, y: p.y + CENTER_OFFSET }
+            }
+        } catch { /* fallback */ }
+        return { x: defaultX + CENTER_OFFSET, y: defaultY + CENTER_OFFSET }
+    })
+    const EDGE_ZONE = 12
+    const onMoveRef = useRef(onMove)
+    onMoveRef.current = onMove
 
     const savePosToStorage = useCallback((x: number, y: number) => {
         localStorage.setItem(storageKey, JSON.stringify({ x: x - CENTER_OFFSET, y: y - CENTER_OFFSET }))
@@ -480,8 +880,13 @@ function useDraggableNote(storageKey: string, defaultX: number, defaultY: number
 
     const onDragMove = useCallback((e: PointerEvent) => {
         if (!dragRef.current || !noteRef.current) return
-        noteRef.current.style.left = `${dragRef.current.origX + (e.clientX - dragRef.current.startX)}px`
-        noteRef.current.style.top = `${dragRef.current.origY + (e.clientY - dragRef.current.startY)}px`
+        const newX = dragRef.current.origX + (e.clientX - dragRef.current.startX)
+        const newY = dragRef.current.origY + (e.clientY - dragRef.current.startY)
+        noteRef.current.style.left = `${newX}px`
+        noteRef.current.style.top = `${newY}px`
+        // Update React state in real-time for SVG line tracking
+        setPos({ x: newX, y: newY })
+        onMoveRef.current?.({ x: newX, y: newY })
     }, [])
 
     const onDragEnd = useCallback((e: PointerEvent) => {
@@ -504,14 +909,291 @@ function useDraggableNote(storageKey: string, defaultX: number, defaultY: number
         document.addEventListener('pointerup', onDragEnd)
     }, [pos, onDragMove, onDragEnd])
 
-    return { noteRef, pos, onDragStart }
+    const onEdgeDrag = useCallback((e: React.PointerEvent) => {
+        if (!noteRef.current) return
+        const rect = noteRef.current.getBoundingClientRect()
+        const x = e.clientX - rect.left
+        const y = e.clientY - rect.top
+        const nearEdge = x < EDGE_ZONE || x > rect.width - EDGE_ZONE || y < EDGE_ZONE || y > rect.height - EDGE_ZONE
+        if (nearEdge) onDragStart(e)
+    }, [onDragStart])
+
+    return { noteRef, pos, onDragStart, onEdgeDrag }
 }
+/* ─── Generic Description Note (reusable for Task & Checklist) ─── */
+const DescNote = memo(function DescNote({ id, name, description, onSave, onClose, sourcePos, colorIndex, onPosChange }: {
+    id: string
+    name: string
+    description: string | null
+    onSave: (id: string, html: string) => void
+    onClose: () => void
+    sourcePos: { x: number; y: number }
+    colorIndex: number
+    onPosChange: (id: string, p: { x: number; y: number }) => void
+}) {
+    const { resolvedDark: dark } = useTheme()
+    const colors = dark ? COLORS_DARK : COLORS_LIGHT
+    const color = colors[colorIndex % colors.length]
+
+    const noteRef = useRef<HTMLDivElement>(null)
+    const editorRef = useRef<HTMLDivElement>(null)
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null)
+    const resizeRef = useRef<{ startX: number; startY: number; origW: number; origH: number; corner: string } | null>(null)
+    const initializedRef = useRef(false)
+    const [focused, setFocused] = useState(false)
+    const [localSize, setLocalSize] = useState<{ w: number; h: number } | null>(() => {
+        try {
+            const saved = localStorage.getItem(`desc_note_size_${id}`)
+            if (saved) return JSON.parse(saved)
+        } catch { /* ignore */ }
+        return null
+    })
+    const storageKey = `desc_note_pos_${id}`
+    const [pos, setPos] = useState(() => {
+        try {
+            const saved = localStorage.getItem(storageKey)
+            if (saved) return JSON.parse(saved) as { x: number; y: number }
+        } catch { /* ignore */ }
+        // Also check legacy key for task desc notes
+        try {
+            const legacy = localStorage.getItem(`task_desc_pos_${id}`)
+            if (legacy) return JSON.parse(legacy) as { x: number; y: number }
+        } catch { /* ignore */ }
+        return { x: sourcePos.x + 320, y: sourcePos.y }
+    })
+
+    // Report initial position on mount
+    useEffect(() => { onPosChange(id, pos) }, []) // eslint-disable-line
+
+    const noteW = localSize?.w ?? 400
+    const noteH = localSize?.h ?? undefined
+    const MIN_W = 200; const MAX_W = 600; const MIN_H = 120
+
+    useEffect(() => {
+        if (editorRef.current && !initializedRef.current) {
+            editorRef.current.innerHTML = description || ''
+            initializedRef.current = true
+        }
+    }, [description])
+
+    const debouncedSave = useCallback(() => {
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = setTimeout(() => {
+            if (editorRef.current) {
+                onSave(id, editorRef.current.innerHTML)
+            }
+        }, 500)
+    }, [id, onSave])
+
+    const exec = useCallback((cmd: string, value?: string) => {
+        document.execCommand(cmd, false, value)
+        editorRef.current?.focus()
+        debouncedSave()
+    }, [debouncedSave])
+
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'b' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); exec('bold') }
+        if (e.key === 'i' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); exec('italic') }
+        if (e.key === 'u' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); exec('underline') }
+    }
+
+    const handleImageUpload = () => {
+        const input = document.createElement('input')
+        input.type = 'file'; input.accept = 'image/*'
+        input.onchange = (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0]
+            if (!file) return
+            const reader = new FileReader()
+            reader.onload = () => exec('insertImage', reader.result as string)
+            reader.readAsDataURL(file)
+        }
+        input.click()
+    }
+
+    /* Drag — reports position in real-time */
+    const EDGE_ZONE = 12
+    const onDragStart = (e: React.PointerEvent) => {
+        e.preventDefault(); e.stopPropagation()
+        const el = noteRef.current!
+        dragRef.current = { startX: e.clientX, startY: e.clientY, origX: parseInt(el.style.left), origY: parseInt(el.style.top) }
+        el.style.zIndex = '999'
+        const onMove = (ev: PointerEvent) => {
+            if (!dragRef.current || !noteRef.current) return
+            const newX = dragRef.current.origX + (ev.clientX - dragRef.current.startX)
+            const newY = dragRef.current.origY + (ev.clientY - dragRef.current.startY)
+            noteRef.current.style.left = `${newX}px`
+            noteRef.current.style.top = `${newY}px`
+            onPosChange(id, { x: newX, y: newY })
+        }
+        const onUp = (ev: PointerEvent) => {
+            if (!dragRef.current) return
+            const newX = dragRef.current.origX + (ev.clientX - dragRef.current.startX)
+            const newY = dragRef.current.origY + (ev.clientY - dragRef.current.startY)
+            dragRef.current = null
+            if (noteRef.current) noteRef.current.style.zIndex = ''
+            document.removeEventListener('pointermove', onMove)
+            document.removeEventListener('pointerup', onUp)
+            setPos({ x: newX, y: newY })
+            localStorage.setItem(storageKey, JSON.stringify({ x: newX, y: newY }))
+            onPosChange(id, { x: newX, y: newY })
+        }
+        document.addEventListener('pointermove', onMove)
+        document.addEventListener('pointerup', onUp)
+    }
+
+    const onEdgeDrag = (e: React.PointerEvent) => {
+        if (!noteRef.current) return
+        const rect = noteRef.current.getBoundingClientRect()
+        const x = e.clientX - rect.left; const y = e.clientY - rect.top
+        if (x < EDGE_ZONE || x > rect.width - EDGE_ZONE || y < EDGE_ZONE || y > rect.height - EDGE_ZONE) onDragStart(e)
+    }
+
+    /* Resize — invisible handles, cursor changes on hover */
+    const onResizeStart = (corner: string) => (e: React.PointerEvent) => {
+        e.stopPropagation(); e.preventDefault()
+        const rect = noteRef.current!.getBoundingClientRect()
+        resizeRef.current = { startX: e.clientX, startY: e.clientY, origW: noteW, origH: rect.height, corner }
+        const onMove = (ev: PointerEvent) => {
+            if (!resizeRef.current) return
+            const dx = ev.clientX - resizeRef.current.startX
+            const dy = ev.clientY - resizeRef.current.startY
+            let newW = resizeRef.current.origW; let newH = resizeRef.current.origH
+            if (corner.includes('r')) newW = Math.min(MAX_W, Math.max(MIN_W, resizeRef.current.origW + dx))
+            if (corner.includes('l')) newW = Math.min(MAX_W, Math.max(MIN_W, resizeRef.current.origW - dx))
+            if (corner.includes('b')) newH = Math.max(MIN_H, resizeRef.current.origH + dy)
+            if (corner.includes('t')) newH = Math.max(MIN_H, resizeRef.current.origH - dy)
+            setLocalSize({ w: newW, h: newH })
+        }
+        const onUp = () => {
+            const sz = localSize ?? { w: noteW, h: noteRef.current?.getBoundingClientRect().height ?? 200 }
+            resizeRef.current = null
+            document.removeEventListener('pointermove', onMove)
+            document.removeEventListener('pointerup', onUp)
+            localStorage.setItem(`desc_note_size_${id}`, JSON.stringify(sz))
+        }
+        document.addEventListener('pointermove', onMove)
+        document.addEventListener('pointerup', onUp)
+    }
+
+    const handleFocus = () => setFocused(true)
+    const handleBlur = (e: React.FocusEvent) => {
+        const related = e.relatedTarget as HTMLElement | null
+        if (related && (related.closest('.text-note-toolbar') || related.closest('[data-text-note-toolbar]'))) return
+        setFocused(false)
+        debouncedSave()
+    }
+
+    return (
+        <div
+            ref={noteRef}
+            data-sticky-note
+            onPointerDown={onEdgeDrag}
+            className={`absolute ${color.bg} ${color.border} border-2 rounded-xl shadow-lg select-none transition-shadow hover:shadow-xl group flex flex-col overflow-hidden`}
+            style={{
+                left: pos.x, top: pos.y, width: noteW, ...(noteH ? { height: noteH } : {}),
+                zIndex: 2,
+            }}
+        >
+            {/* Invisible resize handles — no dots, just cursor zones */}
+            <div onPointerDown={onResizeStart('tl')} className="absolute -top-1 -left-1 w-4 h-4 z-10 cursor-nwse-resize" />
+            <div onPointerDown={onResizeStart('tr')} className="absolute -top-1 -right-1 w-4 h-4 z-10 cursor-nesw-resize" />
+            <div onPointerDown={onResizeStart('bl')} className="absolute -bottom-1 -left-1 w-4 h-4 z-10 cursor-nesw-resize" />
+            <div onPointerDown={onResizeStart('br')} className="absolute -bottom-1 -right-1 w-4 h-4 z-10 cursor-nwse-resize" />
+            {/* Header */}
+            <div onPointerDown={onDragStart} className={`${color.header} rounded-t-[0.625rem] px-3 py-2 flex items-center gap-2 cursor-grab active:cursor-grabbing`}>
+                <MdDescription className={`${color.text} text-sm shrink-0`} />
+                <h3 className="flex-1 text-xs font-bold text-text-primary truncate">{name}</h3>
+                <span className={`text-[0.5rem] font-semibold ${color.text} bg-white/30 px-1.5 py-0.5 rounded`}>MÔ TẢ</span>
+                <button
+                    onPointerDown={onDragStart}
+                    onDoubleClick={(e) => { e.stopPropagation(); onClose() }}
+                    className="group/pin w-10 h-10 flex items-center justify-center cursor-grab active:cursor-grabbing shrink-0"
+                    title="Kéo để di chuyển • Nhấn 2 lần để đóng"
+                >
+                    <img src="/pin-normal.png" alt="pin" className="w-full h-full object-contain block group-active/pin:hidden transition-transform duration-200 scale-90 group-hover/pin:scale-100 group-hover/pin:translate-x-[4px] group-hover/pin:translate-y-[-4px]" />
+                    <img src="/pin-active.png" alt="pin" className="w-full h-full object-contain hidden group-active/pin:block group-active/pin:translate-x-[25px] group-active/pin:translate-y-[-18px] transition-transform duration-150" style={{ filter: 'drop-shadow(3px 6px 4px rgba(0,0,0,0.4))' }} />
+                </button>
+            </div>
+
+            {/* ContentEditable area — images constrained */}
+            <div className="flex-1 min-h-0 relative overflow-hidden">
+                <div
+                    ref={editorRef}
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={debouncedSave}
+                    onKeyDown={handleKeyDown}
+                    onFocus={handleFocus}
+                    onBlur={handleBlur}
+                    className="px-3 py-2 text-xs text-text-primary outline-none overflow-y-auto prose prose-sm max-w-none desc-note-content"
+                    style={{ minHeight: '4rem', maxHeight: noteH ? undefined : '18rem', lineHeight: '1.5' }}
+                    data-placeholder="Nhập mô tả..."
+                />
+            </div>
+
+            {/* Floating Toolbar */}
+            {focused && (
+                <div
+                    data-text-note-toolbar
+                    className="text-note-toolbar absolute -bottom-12 left-0 z-50 flex items-center gap-1 px-2 py-1.5 rounded-lg shadow-xl border border-border bg-surface/95 backdrop-blur-sm"
+                    onMouseDown={e => e.preventDefault()}
+                >
+                    <button onClick={() => exec('bold')} className="w-7 h-7 rounded flex items-center justify-center hover:bg-primary/10 text-text-primary" title="Bold"><span className="text-xs font-bold">B</span></button>
+                    <button onClick={() => exec('italic')} className="w-7 h-7 rounded flex items-center justify-center hover:bg-primary/10 text-text-primary" title="Italic"><span className="text-xs italic">I</span></button>
+                    <button onClick={() => exec('underline')} className="w-7 h-7 rounded flex items-center justify-center hover:bg-primary/10 text-text-primary" title="Underline"><span className="text-xs underline">U</span></button>
+                    <div className="w-px h-5 bg-border mx-0.5" />
+                    <select
+                        onChange={(e) => { exec('fontSize', '7'); const sel = window.getSelection(); if (sel && sel.rangeCount > 0) { const els = editorRef.current?.querySelectorAll('font[size="7"]'); els?.forEach(el => { (el as HTMLElement).removeAttribute('size'); (el as HTMLElement).style.fontSize = e.target.value }) }; debouncedSave() }}
+                        defaultValue=""
+                        className="h-7 px-1 rounded text-[10px] bg-transparent hover:bg-primary/10 text-text-primary outline-none cursor-pointer border border-border/30"
+                        title="Cỡ chữ"
+                    >
+                        <option value="" disabled>Aa</option>
+                        <option value="10px">10</option>
+                        <option value="12px">12</option>
+                        <option value="14px">14</option>
+                        <option value="16px">16</option>
+                        <option value="20px">20</option>
+                        <option value="24px">24</option>
+                        <option value="28px">28</option>
+                    </select>
+                    <div className="w-px h-5 bg-border mx-0.5" />
+                    <button onClick={handleImageUpload} className="w-7 h-7 rounded flex items-center justify-center hover:bg-primary/10 text-text-primary" title="Hình ảnh"><span className="material-icons-round text-xs">image</span></button>
+                </div>
+            )}
+        </div>
+    )
+})
 
 /* ─── All Tasks Note (Blue Pastel) ─── */
-function AllTasksNote({ tasks }: { tasks: TaskRow[] }) {
-    const { noteRef, pos, onDragStart } = useDraggableNote('all_tasks_note_pos', 400, 100)
+const AllTasksNote = memo(function AllTasksNote({ tasks }: { tasks: TaskRow[] }) {
+    const { noteRef, pos, onDragStart, onEdgeDrag } = useDraggableNote('all_tasks_note_pos', 400, 100)
     const total = tasks.length
     const done = tasks.filter(t => t.status === 'done' || t.status === 'completed').length
+    const [openDescs, setOpenDescs] = useState<Set<string>>(() => {
+        try {
+            const saved = localStorage.getItem('open_desc_notes')
+            if (saved) return new Set(JSON.parse(saved) as string[])
+        } catch { /* ignore */ }
+        return new Set()
+    })
+    const taskRowRefs = useRef<Record<string, HTMLDivElement | null>>({})
+    const [descPositions, setDescPositions] = useState<Record<string, { x: number; y: number }>>({})
+
+    const handleDescPosChange = useCallback((taskId: string, p: { x: number; y: number }) => {
+        setDescPositions(prev => ({ ...prev, [taskId]: p }))
+    }, [])
+
+    const toggleDesc = useCallback((taskId: string) => {
+        setOpenDescs(prev => {
+            const next = new Set(prev)
+            if (next.has(taskId)) next.delete(taskId)
+            else next.add(taskId)
+            localStorage.setItem('open_desc_notes', JSON.stringify([...next]))
+            return next
+        })
+    }, [])
 
     const statusBadge = (status: string, isPaid?: boolean) => {
         const map: Record<string, { bg: string; text: string; label: string }> = {
@@ -520,7 +1202,6 @@ function AllTasksNote({ tasks }: { tasks: TaskRow[] }) {
             completed: { bg: 'bg-purple-100', text: 'text-purple-600', label: 'Completed' },
             done: { bg: 'bg-emerald-100', text: 'text-emerald-600', label: 'Done' },
         }
-        // If paid, override to show "Done"
         if (isPaid) {
             const d = map.done
             return <span className={`text-[0.5rem] font-semibold px-1.5 py-0.5 rounded-md ${d.bg} ${d.text}`}>{d.label}</span>
@@ -529,60 +1210,126 @@ function AllTasksNote({ tasks }: { tasks: TaskRow[] }) {
         return <span className={`text-[0.5rem] font-semibold px-1.5 py-0.5 rounded-md ${s.bg} ${s.text}`}>{s.label}</span>
     }
 
+    const NOTE_W = 280
+    const openDescTasks = tasks.filter(t => openDescs.has(t.id) && t.description)
+
     return (
-        <div
-            ref={noteRef}
-            data-sticky-note
-            className="absolute rounded-2xl shadow-lg select-none transition-all hover:shadow-xl group"
-            style={{
-                left: pos.x, top: pos.y, width: 280,
-                background: 'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 40%, #E0F2FE 100%)',
-                border: '2px solid #93C5FD',
-                boxShadow: '0 4px 24px rgba(59, 130, 246, 0.08), 0 0 0 1px rgba(96, 165, 250, 0.1)',
-            }}
-        >
-            <div className="rounded-t-[0.875rem] px-3.5 py-2.5 flex items-center gap-2" style={{ background: 'linear-gradient(135deg, #BFDBFE 0%, #93C5FD 100%)' }}>
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #60A5FA, #3B82F6)' }}>
-                    <MdAssignment className="text-white text-sm" />
-                </div>
-                <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-extrabold text-blue-900 truncate">Tất cả task</h3>
-                    <p className="text-[0.6rem] text-blue-500 font-medium">{done}/{total} hoàn thành</p>
-                </div>
-                <button onPointerDown={onDragStart} className="group/pin w-10 h-10 flex items-center justify-center transition-all ml-0.5 cursor-grab active:cursor-grabbing" title="Kéo để di chuyển">
-                    <img src="/pin-normal.png" alt="pin" className="w-full h-full object-contain block group-active/pin:hidden transition-transform duration-200 scale-90 group-hover/pin:scale-100 group-hover/pin:translate-x-[4px] group-hover/pin:translate-y-[-4px]" />
-                    <img src="/pin-active.png" alt="pin" className="w-full h-full object-contain hidden group-active/pin:block group-active/pin:translate-x-[25px] group-active/pin:translate-y-[-18px] transition-transform duration-150" style={{ filter: 'drop-shadow(3px 6px 4px rgba(0,0,0,0.4))' }} />
-                </button>
-            </div>
-            <div className="px-3.5 py-2 space-y-1 max-h-[22rem] overflow-y-auto">
-                {tasks.length === 0 ? (
-                    <div className="text-center py-4">
-                        <span className="text-2xl block mb-1">📋</span>
-                        <p className="text-xs text-blue-400 font-medium">Chưa có task nào</p>
+        <>
+            {/* SVG connecting lines — uses live descPositions */}
+            {openDescTasks.map((task) => {
+                const rowEl = taskRowRefs.current[task.id]
+                if (!rowEl) return null
+                const rowY = rowEl.offsetTop + rowEl.offsetHeight / 2
+
+                const descPos = descPositions[task.id] || { x: pos.x + 320, y: pos.y }
+                const descNoteW = 280
+
+                const x1 = pos.x + NOTE_W - 30
+                const y1 = pos.y + rowY
+                const x2 = descPos.x + descNoteW / 2
+                const y2 = descPos.y + 80
+
+                return (
+                    <svg
+                        key={`line-${task.id}`}
+                        className="absolute pointer-events-none"
+                        style={{ left: 0, top: 0, width: '100%', height: '100%', overflow: 'visible', zIndex: 0 }}
+                    >
+                        <line
+                            x1={x1} y1={y1} x2={x2} y2={y2}
+                            stroke="rgba(147, 197, 253, 0.3)"
+                            strokeWidth={1.5}
+                            strokeDasharray="6 4"
+                        />
+                    </svg>
+                )
+            })}
+
+            {/* Main AllTasksNote */}
+            <div
+                ref={noteRef}
+                data-sticky-note
+                onPointerDown={onEdgeDrag}
+                className="absolute rounded-2xl shadow-lg select-none transition-shadow hover:shadow-xl group"
+                style={{
+                    left: pos.x, top: pos.y, width: NOTE_W,
+                    background: 'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 40%, #E0F2FE 100%)',
+                    border: '2px solid #93C5FD',
+                    boxShadow: '0 4px 24px rgba(59, 130, 246, 0.08), 0 0 0 1px rgba(96, 165, 250, 0.1)',
+                    zIndex: 1,
+                }}
+            >
+                <div onPointerDown={onDragStart} className="rounded-t-[0.875rem] px-3.5 py-2.5 flex items-center gap-2 cursor-grab active:cursor-grabbing" style={{ background: 'linear-gradient(135deg, #BFDBFE 0%, #93C5FD 100%)' }}>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #60A5FA, #3B82F6)' }}>
+                        <MdAssignment className="text-white text-sm" />
                     </div>
-                ) : (
-                    tasks.map(task => (
-                        <div key={task.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-white/60 hover:bg-white/80 transition-all">
-                            <span className={`text-xs leading-snug font-medium flex-1 min-w-0 truncate ${task.status === 'done' ? 'line-through text-blue-300' : 'text-blue-900'}`}>{task.name}</span>
-                            {statusBadge(task.status, (task as any).is_paid)}
+                    <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-extrabold text-blue-900 truncate">Tất cả task</h3>
+                        <p className="text-[0.6rem] text-blue-500 font-medium">{done}/{total} hoàn thành</p>
+                    </div>
+                    <button onPointerDown={onDragStart} className="group/pin w-10 h-10 flex items-center justify-center transition-all ml-0.5 cursor-grab active:cursor-grabbing" title="Kéo để di chuyển">
+                        <img src="/pin-normal.png" alt="pin" className="w-full h-full object-contain block group-active/pin:hidden transition-transform duration-200 scale-90 group-hover/pin:scale-100 group-hover/pin:translate-x-[4px] group-hover/pin:translate-y-[-4px]" />
+                        <img src="/pin-active.png" alt="pin" className="w-full h-full object-contain hidden group-active/pin:block group-active/pin:translate-x-[25px] group-active/pin:translate-y-[-18px] transition-transform duration-150" style={{ filter: 'drop-shadow(3px 6px 4px rgba(0,0,0,0.4))' }} />
+                    </button>
+                </div>
+                <div className="px-3.5 py-2 space-y-1 max-h-[22rem] overflow-y-auto">
+                    {tasks.length === 0 ? (
+                        <div className="text-center py-4">
+                            <span className="text-2xl block mb-1">📋</span>
+                            <p className="text-xs text-blue-400 font-medium">Chưa có task nào</p>
                         </div>
-                    ))
+                    ) : (
+                        tasks.map(task => (
+                            <div
+                                key={task.id}
+                                ref={el => { taskRowRefs.current[task.id] = el }}
+                                className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-white/60 hover:bg-white/80 transition-all"
+                            >
+                                <span className={`text-xs leading-snug font-medium flex-1 min-w-0 truncate ${task.status === 'done' ? 'line-through text-blue-300' : 'text-blue-900'}`}>{task.name}</span>
+                                {task.description && (
+                                    <button
+                                        onClick={() => toggleDesc(task.id)}
+                                        className={`shrink-0 w-5 h-5 rounded flex items-center justify-center transition-colors ${openDescs.has(task.id) ? 'bg-blue-300/50' : 'hover:bg-blue-200/60'}`}
+                                        title="Xem mô tả"
+                                    >
+                                        <MdDescription className={`text-xs ${openDescs.has(task.id) ? 'text-blue-600' : 'text-blue-400'}`} />
+                                    </button>
+                                )}
+                                {statusBadge(task.status, (task as any).is_paid)}
+                            </div>
+                        ))
+                    )}
+                </div>
+                {total > 0 && (
+                    <div className="px-3.5 pb-2.5 pt-1">
+                        <div className="w-full bg-blue-100 h-1.5 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.round((done / total) * 100)}%`, background: 'linear-gradient(90deg, #60A5FA, #3B82F6, #2563EB)' }} />
+                        </div>
+                    </div>
                 )}
             </div>
-            {total > 0 && (
-                <div className="px-3.5 pb-2.5 pt-1">
-                    <div className="w-full bg-blue-100 h-1.5 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.round((done / total) * 100)}%`, background: 'linear-gradient(90deg, #60A5FA, #3B82F6, #2563EB)' }} />
-                    </div>
-                </div>
-            )}
-        </div>
+
+            {/* Task Description Notes — using generic DescNote */}
+            {openDescTasks.map((task) => (
+                <DescNote
+                    key={`desc-${task.id}`}
+                    id={task.id}
+                    name={task.name}
+                    description={task.description}
+                    onSave={(id, html) => taskApi.update(id, { description: html } as any)}
+                    onClose={() => toggleDesc(task.id)}
+                    sourcePos={pos}
+                    colorIndex={task.id.charCodeAt(0) % COLORS_LIGHT.length}
+                    onPosChange={handleDescPosChange}
+                />
+            ))}
+        </>
     )
-}
+})
 
 /* ─── Weekly Deadline Note (Emerald Pastel) ─── */
-function WeeklyDeadlineNote({ tasks }: { tasks: TaskRow[] }) {
-    const { noteRef, pos, onDragStart } = useDraggableNote('weekly_deadline_note_pos', 700, 100)
+const WeeklyDeadlineNote = memo(function WeeklyDeadlineNote({ tasks }: { tasks: TaskRow[] }) {
+    const { noteRef, pos, onDragStart, onEdgeDrag } = useDraggableNote('weekly_deadline_note_pos', 700, 100)
 
     // Filter tasks with deadline this week
     const weekTasks = useMemo(() => {
@@ -615,7 +1362,8 @@ function WeeklyDeadlineNote({ tasks }: { tasks: TaskRow[] }) {
         <div
             ref={noteRef}
             data-sticky-note
-            className="absolute rounded-2xl shadow-lg select-none transition-all hover:shadow-xl group"
+            onPointerDown={onEdgeDrag}
+            className="absolute rounded-2xl shadow-lg select-none transition-shadow hover:shadow-xl group"
             style={{
                 left: pos.x, top: pos.y, width: 280,
                 background: 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 40%, #E0FFF4 100%)',
@@ -623,7 +1371,7 @@ function WeeklyDeadlineNote({ tasks }: { tasks: TaskRow[] }) {
                 boxShadow: '0 4px 24px rgba(16, 185, 129, 0.08), 0 0 0 1px rgba(52, 211, 153, 0.1)',
             }}
         >
-            <div className="rounded-t-[0.875rem] px-3.5 py-2.5 flex items-center gap-2" style={{ background: 'linear-gradient(135deg, #A7F3D0 0%, #6EE7B7 100%)' }}>
+            <div onPointerDown={onDragStart} className="rounded-t-[0.875rem] px-3.5 py-2.5 flex items-center gap-2 cursor-grab active:cursor-grabbing" style={{ background: 'linear-gradient(135deg, #A7F3D0 0%, #6EE7B7 100%)' }}>
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #34D399, #10B981)' }}>
                     <MdDateRange className="text-white text-sm" />
                 </div>
@@ -659,17 +1407,21 @@ function WeeklyDeadlineNote({ tasks }: { tasks: TaskRow[] }) {
             </div>
         </div>
     )
-}
+})
 
 /* ─── Main Canvas Page ─── */
 export default function ChecklistPage() {
     const { resolvedDark } = useTheme()
-    const [checklists, setChecklists] = useState<ChecklistRow[]>([])
-    const [loading, setLoading] = useState(true)
+    const {
+        checklists, setChecklists, checklistsLoading: loading,
+        dailyTasks, setDailyTasks,
+        tasks: allTasks,
+        refreshChecklists,
+    } = useDataCache()
     const [aiPrompt, setAiPrompt] = useState('')
     const [aiLoading, setAiLoading] = useState(false)
     const [showAiModal, setShowAiModal] = useState(false)
-    const [allTasks, setAllTasks] = useState<TaskRow[]>([])
+    const [showNoteTypeMenu, setShowNoteTypeMenu] = useState(false)
 
     /* Canvas pan + zoom state */
     const canvasRef = useRef<HTMLDivElement>(null)
@@ -705,16 +1457,14 @@ export default function ChecklistPage() {
         return x + w > viewport.left && x < viewport.right && y + h > viewport.top && y < viewport.bottom
     }, [viewport])
 
-    /* Daily tasks state */
-    const [dailyTasks, setDailyTasks] = useState<DailyTaskRow[]>([])
-    const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
-
-    const loadChecklists = useCallback(async () => {
-        setLoading(true)
-        try { setChecklists(await checklistApi.list()) } finally { setLoading(false) }
+    const todayStr = useMemo(() => {
+        const d = new Date()
+        const y = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }) // en-CA gives yyyy-mm-dd
+        return y
     }, [])
 
-    useEffect(() => { loadChecklists() }, [loadChecklists])
+    /* Initial data comes from DataCacheContext — background refresh on mount */
+    useEffect(() => { refreshChecklists() }, [refreshChecklists])
 
     /* Block browser zoom — only canvas zoom should work */
     useEffect(() => {
@@ -781,26 +1531,35 @@ export default function ChecklistPage() {
         }
     }, [loading, checklists, zoom, updateViewport])
 
-    /* Load daily tasks */
-    const loadDailyTasks = useCallback(async () => {
-        try { setDailyTasks(await dailyTaskApi.today()) } catch { /* ignore */ }
-    }, [])
-    useEffect(() => { loadDailyTasks() }, [loadDailyTasks])
-
-    /* Load all tasks */
-    const loadAllTasks = useCallback(async () => {
-        try { setAllTasks(await taskApi.list()) } catch { /* ignore */ }
-    }, [])
-    useEffect(() => { loadAllTasks() }, [loadAllTasks])
 
     const toggleDailyTask = useCallback(async (id: string) => {
-        const updated = await dailyTaskApi.toggle(id)
-        setDailyTasks(prev => prev.map(t => t.id === id ? updated : t))
+        // Optimistic: update UI immediately
+        setDailyTasks(prev => prev.map(t => t.id === id ? { ...t, is_completed: !t.is_completed } : t))
+        try {
+            const updated = await dailyTaskApi.toggle(id)
+            setDailyTasks(prev => prev.map(t => t.id === id ? updated : t))
+        } catch {
+            // Revert on error
+            setDailyTasks(prev => prev.map(t => t.id === id ? { ...t, is_completed: !t.is_completed } : t))
+        }
     }, [])
 
-    const updateChecklist = useCallback(async (id: string, data: Partial<ChecklistRow>) => {
-        const updated = await checklistApi.update(id, data)
-        setChecklists(prev => prev.map(c => c.id === id ? updated : c))
+    const updateTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+    const updateChecklist = useCallback((id: string, data: Partial<ChecklistRow>) => {
+        // Optimistic: update UI immediately
+        setChecklists(prev => prev.map(c => c.id === id ? { ...c, ...data } : c))
+        // Debounce API call per checklist (300ms)
+        const timers = updateTimersRef.current
+        if (timers.has(id)) clearTimeout(timers.get(id)!)
+        timers.set(id, setTimeout(async () => {
+            timers.delete(id)
+            try {
+                await checklistApi.update(id, data)
+            } catch {
+                checklistApi.list().then(setChecklists).catch(() => {})
+            }
+        }, 300))
     }, [])
 
     const deleteChecklist = async (id: string) => {
@@ -808,15 +1567,16 @@ export default function ChecklistPage() {
         setChecklists(prev => prev.filter(c => c.id !== id))
     }
 
-    const createChecklist = async (pos?: { x: number, y: number }) => {
+    const createChecklist = async (pos?: { x: number, y: number }, type: 'checklist' | 'text' = 'checklist') => {
         const scrollEl = canvasRef.current
         const x = pos?.x ? pos.x - CENTER_OFFSET : ((scrollEl?.scrollLeft ?? 0) / zoom + 200 - CENTER_OFFSET)
         const y = pos?.y ? pos.y - CENTER_OFFSET : ((scrollEl?.scrollTop ?? 0) / zoom + 200 - CENTER_OFFSET)
         const cl = await checklistApi.create({
-            title: 'Note mới',
+            title: type === 'text' ? 'Ghi chú' : 'Note mới',
             color: COLORS[Math.floor(Math.random() * COLORS.length)].name,
             pos_x: x,
             pos_y: y,
+            type,
         } as any)
         setChecklists(prev => [cl, ...prev])
     }
@@ -1076,13 +1836,37 @@ export default function ChecklistPage() {
                     <span className="material-icons-round text-sm">auto_awesome</span>
                     AI
                 </button>
-                <button
-                    onClick={() => createChecklist()}
-                    className="bg-surface border border-border text-text-primary text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-1.5 hover:border-primary-lighter transition-all"
-                >
-                    <span className="material-icons-round text-sm">add</span>
-                    Thêm note
-                </button>
+                <div className="relative">
+                    <button
+                        onClick={() => setShowNoteTypeMenu(p => !p)}
+                        className="bg-surface border border-border text-text-primary text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-1.5 hover:border-primary-lighter transition-all"
+                    >
+                        <span className="material-icons-round text-sm">add</span>
+                        Thêm note
+                        <span className="material-icons-round text-[0.7rem] ml-0.5">expand_more</span>
+                    </button>
+                    {showNoteTypeMenu && (
+                        <>
+                            <div className="fixed inset-0 z-40" onClick={() => setShowNoteTypeMenu(false)} />
+                            <div className="absolute top-full mt-1 right-0 z-50 bg-surface border border-border rounded-lg shadow-xl overflow-hidden min-w-[140px]">
+                                <button
+                                    onClick={() => { createChecklist(undefined, 'checklist'); setShowNoteTypeMenu(false) }}
+                                    className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-text-primary hover:bg-primary/10 transition-colors"
+                                >
+                                    <span className="material-icons-round text-sm text-primary">checklist</span>
+                                    Checklist
+                                </button>
+                                <button
+                                    onClick={() => { createChecklist(undefined, 'text'); setShowNoteTypeMenu(false) }}
+                                    className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-text-primary hover:bg-primary/10 transition-colors"
+                                >
+                                    <span className="material-icons-round text-sm text-primary">sticky_note_2</span>
+                                    Text
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
 
             {/* Infinite canvas */}
@@ -1118,13 +1902,23 @@ export default function ChecklistPage() {
                         ) : (
                             <>
                                 {checklists.filter(isNoteVisible).map(cl => (
-                                    <StickyNote
-                                        key={cl.id}
-                                        checklist={cl}
-                                        onUpdate={updateChecklist}
-                                        onDelete={deleteChecklist}
-                                        dark={resolvedDark}
-                                    />
+                                    cl.type === 'text' ? (
+                                        <TextNote
+                                            key={cl.id}
+                                            checklist={cl}
+                                            onUpdate={updateChecklist}
+                                            onDelete={deleteChecklist}
+                                            dark={resolvedDark}
+                                        />
+                                    ) : (
+                                        <StickyNote
+                                            key={cl.id}
+                                            checklist={cl}
+                                            onUpdate={updateChecklist}
+                                            onDelete={deleteChecklist}
+                                            dark={resolvedDark}
+                                        />
+                                    )
                                 ))}
 
                                 {/* Daily Tasks — fixed container */}

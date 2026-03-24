@@ -3,24 +3,43 @@ import pool from '../db.js'
 
 const router = Router()
 
-// GET income records — combines income_records + paid tasks (filtered by user)
+// GET income records — combines income_records + paid tasks (filtered by user + optional month)
 router.get('/', async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page as string) || 1)
     const limit = Math.max(1, parseInt(req.query.limit as string) || 10)
     const offset = (page - 1) * limit
+    const month = req.query.month as string // format: YYYY-MM
+    const TZ = 'Asia/Ho_Chi_Minh'
+
+    let incomeFilter = 'WHERE user_id = $1'
+    let taskFilter = 'WHERE is_paid = true AND user_id = $1'
+    const incomeParams: (string | undefined)[] = [req.userId]
+    const taskParams: (string | undefined)[] = [req.userId]
+
+    if (month) {
+        // Filter by specific month
+        incomeFilter += ` AND to_char(received_date, 'YYYY-MM') = $2`
+        incomeParams.push(month)
+        taskFilter += ` AND to_char((COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')::date, 'YYYY-MM') = $2`
+        taskParams.push(month)
+    } else {
+        // Default: current month
+        incomeFilter += ` AND date_trunc('month', received_date) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}')::date)`
+        taskFilter += ` AND date_trunc('month', (COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))`
+    }
 
     const { rows: incomeRows } = await pool.query(
         `SELECT id, task_name, category, received_date, amount, status, created_at, 'income' as source
-         FROM income_records WHERE user_id = $1 ORDER BY received_date DESC`,
-        [req.userId]
+         FROM income_records ${incomeFilter} ORDER BY received_date DESC`,
+        incomeParams
     )
 
     const { rows: paidTaskRows } = await pool.query(
         `SELECT id, name as task_name, 'Phí dịch vụ' as category, 
          COALESCE(updated_at::date, created_at::date) as received_date, 
          price as amount, 'completed' as status, created_at, 'task' as source
-         FROM tasks WHERE is_paid = true AND user_id = $1 ORDER BY updated_at DESC`,
-        [req.userId]
+         FROM tasks ${taskFilter} ORDER BY updated_at DESC`,
+        taskParams
     )
 
     const allRecords = [...incomeRows, ...paidTaskRows]
@@ -32,21 +51,37 @@ router.get('/', async (req, res) => {
     res.json({ records: paged, total, page, limit })
 })
 
-// GET monthly total
+// GET monthly total (supports optional month param)
 router.get('/monthly-total', async (req, res) => {
     const TZ = 'Asia/Ho_Chi_Minh'
+    const month = req.query.month as string // format: YYYY-MM
+
+    let incomeDateFilter: string
+    let taskDateFilter: string
+    const incomeParams: (string | undefined)[] = [req.userId]
+    const taskParams: (string | undefined)[] = [req.userId]
+
+    if (month) {
+        incomeDateFilter = `AND to_char(received_date, 'YYYY-MM') = $2`
+        incomeParams.push(month)
+        taskDateFilter = `AND to_char((COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')::date, 'YYYY-MM') = $2`
+        taskParams.push(month)
+    } else {
+        incomeDateFilter = `AND date_trunc('month', received_date) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}')::date)`
+        taskDateFilter = `AND date_trunc('month', (COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))`
+    }
+
     const { rows: incomeTotal } = await pool.query(`
     SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count
     FROM income_records
-    WHERE user_id = $1 AND date_trunc('month', received_date) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}')::date)
-  `, [req.userId])
+    WHERE user_id = $1 ${incomeDateFilter}
+  `, incomeParams)
 
     const { rows: taskTotal } = await pool.query(`
     SELECT COALESCE(SUM(price), 0) AS total, COUNT(*) AS count
     FROM tasks
-    WHERE user_id = $1 AND is_paid = true
-    AND date_trunc('month', (COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))
-  `, [req.userId])
+    WHERE user_id = $1 AND is_paid = true ${taskDateFilter}
+  `, taskParams)
 
     const total = parseInt(String(incomeTotal[0].total)) + parseInt(String(taskTotal[0].total))
     const count = parseInt(String(incomeTotal[0].count)) + parseInt(String(taskTotal[0].count))

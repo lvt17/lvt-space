@@ -14,18 +14,18 @@ router.get('/', async (req, res) => {
 
 // POST create task
 router.post('/', async (req, res) => {
-    const { name, deadline, price, status = 'pending' } = req.body
+    const { name, deadline, price, status = 'pending', description } = req.body
     const { rows } = await pool.query(
-        `INSERT INTO tasks (name, deadline, price, status, user_id)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [name, deadline || null, price || 0, status, req.userId]
+        `INSERT INTO tasks (name, deadline, price, status, description, user_id)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [name, deadline || null, price || 0, status, description || null, req.userId]
     )
     res.status(201).json(rows[0])
 })
 
 // PUT update task
 router.put('/:id', async (req, res) => {
-    const { name, deadline, price, status, is_paid } = req.body
+    const { name, deadline, price, status, is_paid, description } = req.body
     const { rows } = await pool.query(
         `UPDATE tasks
      SET name = COALESCE($1, name),
@@ -33,9 +33,10 @@ router.put('/:id', async (req, res) => {
          price = COALESCE($3, price),
          status = COALESCE($4, status),
          is_paid = COALESCE($5, is_paid),
+         description = COALESCE($6, description),
          updated_at = NOW()
-     WHERE id = $6 AND user_id = $7 RETURNING *`,
-        [name, deadline, price, status, is_paid, req.params.id, req.userId]
+     WHERE id = $7 AND user_id = $8 RETURNING *`,
+        [name, deadline, price, status, is_paid, description, req.params.id, req.userId]
     )
     if (!rows.length) return res.status(404).json({ error: 'Task not found' })
     res.json(rows[0])
