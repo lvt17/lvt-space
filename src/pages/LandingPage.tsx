@@ -402,7 +402,7 @@ export default function LandingPage() {
                                 <p><span className="text-emerald-400">$</span> <span className="text-white/80">lvt login</span></p>
                                 <p className="text-emerald-400/70">  ✓ Đã đăng nhập thành công!</p>
                                 <p><span className="text-emerald-400">$</span> <span className="text-white/80">lvt whoami</span></p>
-                                <p className="text-cyan-400/70">  👤 Liêu Vĩnh Toàn · 📋 5/23 tasks · 💰 21.500.000₫</p>
+                                <p className="text-cyan-400/70">  👤 Your Name · 📋 12/30 tasks · 💰 15.000.000₫</p>
                                 <p><span className="text-emerald-400">$</span> <span className="text-white/80">lvt stats</span></p>
                                 <p className="text-purple-400/70">  📊 Dashboard — xem ngay trên terminal!</p>
                             </div>
@@ -411,13 +411,13 @@ export default function LandingPage() {
                         {/* Features list */}
                         <div className="flex flex-col justify-center space-y-5">
                             {[
-                                { icon: '📋', title: lang === 'vi' ? 'Quản lý tasks' : 'Task Management', desc: lang === 'vi' ? 'Thêm, sửa, xoá, đánh dấu hoàn thành từ terminal' : 'Add, edit, delete, mark complete from terminal' },
-                                { icon: '💰', title: lang === 'vi' ? 'Theo dõi thu nhập' : 'Income Tracking', desc: lang === 'vi' ? 'Xem thu nhập, thống kê, biểu đồ hiệu suất' : 'View income, stats, performance charts' },
-                                { icon: '📒', title: lang === 'vi' ? 'Ghi chú & Checklist' : 'Notes & Checklists', desc: lang === 'vi' ? 'Xem, toggle check, tạo note mới ngay từ CLI' : 'View, toggle, create notes from CLI' },
-                                { icon: '🤖', title: lang === 'vi' ? 'MCP / AI Agent' : 'MCP / AI Agent', desc: lang === 'vi' ? 'Kết nối AI Agent để điều khiển bằng ngôn ngữ tự nhiên' : 'Connect AI agents to control with natural language' },
+                                { icon: <FiCheckSquare className="text-xl text-blue-400" />, title: lang === 'vi' ? 'Quản lý tasks' : 'Task Management', desc: lang === 'vi' ? 'Thêm, sửa, xoá, đánh dấu hoàn thành từ terminal' : 'Add, edit, delete, mark complete from terminal' },
+                                { icon: <FiDollarSign className="text-xl text-emerald-400" />, title: lang === 'vi' ? 'Theo dõi thu nhập' : 'Income Tracking', desc: lang === 'vi' ? 'Xem thu nhập, thống kê, biểu đồ hiệu suất' : 'View income, stats, performance charts' },
+                                { icon: <FiGrid className="text-xl text-amber-400" />, title: lang === 'vi' ? 'Ghi chú & Checklist' : 'Notes & Checklists', desc: lang === 'vi' ? 'Xem, toggle check, tạo note mới ngay từ CLI' : 'View, toggle, create notes from CLI' },
+                                { icon: <FiZap className="text-xl text-purple-400" />, title: lang === 'vi' ? 'MCP / AI Agent' : 'MCP / AI Agent', desc: lang === 'vi' ? 'Kết nối AI Agent để điều khiển bằng ngôn ngữ tự nhiên' : 'Connect AI agents to control with natural language' },
                             ].map((f, i) => (
                                 <div key={i} className="flex items-start gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] transition-all">
-                                    <span className="text-2xl shrink-0 mt-0.5">{f.icon}</span>
+                                    <div className="w-10 h-10 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">{f.icon}</div>
                                     <div>
                                         <h4 className="font-bold text-white/90 mb-1">{f.title}</h4>
                                         <p className="text-sm text-white/40">{f.desc}</p>
