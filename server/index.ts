@@ -44,34 +44,38 @@ app.use('/api/ai', requireAuth, aiRoutes)
 // User info endpoint (for CLI whoami)
 app.get('/api/me', requireAuth, async (req, res) => {
     try {
-        // Get user profile from Supabase
-        const { createClient } = await import('@supabase/supabase-js')
-        const supabase = createClient(
-            process.env.VITE_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY!,
-        )
-        const { data: userData } = await supabase.auth.admin.getUserById(req.userId!)
-
-        // Get stats
-        const [taskStats, incomeStats, tokenStats] = await Promise.all([
+        const TZ = 'Asia/Ho_Chi_Minh'
+        const [userResult, taskStats, incomeStats, tokenStats] = await Promise.all([
+            pool.query(
+                `SELECT email, raw_user_meta_data, raw_app_meta_data, created_at
+                 FROM auth.users WHERE id = $1`,
+                [req.userId]
+            ),
             pool.query(`SELECT count(*) as total, count(*) FILTER (WHERE status = 'completed') as completed FROM tasks WHERE user_id = $1`, [req.userId]),
-            pool.query(`SELECT COALESCE(SUM(amount), 0) as total_income, count(*) as records FROM income WHERE user_id = $1`, [req.userId]),
+            pool.query(`
+                SELECT COALESCE(SUM(amount), 0) as month_total FROM (
+                    SELECT price AS amount FROM tasks WHERE user_id = $1 AND date_trunc('month', (created_at AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))
+                    UNION ALL
+                    SELECT amount FROM income_records WHERE user_id = $1 AND date_trunc('month', received_date) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}')::date)
+                ) t`, [req.userId]),
             pool.query(`SELECT count(*) as total FROM personal_tokens WHERE user_id = $1`, [req.userId]),
         ])
 
-        const user = userData?.user
+        const user = userResult.rows[0]
+        const meta = user?.raw_user_meta_data || {}
+        const appMeta = user?.raw_app_meta_data || {}
+
         res.json({
             userId: req.userId,
             authMethod: req.authMethod,
             email: user?.email || null,
-            displayName: user?.user_metadata?.display_name || user?.user_metadata?.full_name || null,
-            provider: user?.app_metadata?.provider || 'email',
+            displayName: meta.display_name || meta.full_name || meta.name || null,
+            provider: appMeta.provider || 'email',
             createdAt: user?.created_at || null,
             stats: {
                 totalTasks: parseInt(taskStats.rows[0]?.total || '0'),
                 completedTasks: parseInt(taskStats.rows[0]?.completed || '0'),
-                totalIncome: parseFloat(incomeStats.rows[0]?.total_income || '0'),
-                incomeRecords: parseInt(incomeStats.rows[0]?.records || '0'),
+                totalIncome: parseFloat(incomeStats.rows[0]?.month_total || '0'),
                 activeTokens: parseInt(tokenStats.rows[0]?.total || '0'),
             },
         })

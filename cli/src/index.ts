@@ -16,6 +16,55 @@ program
     .name('lvt')
     .description(chalk.bold('Lvt Space CLI') + chalk.dim(' — Manage your workspace from terminal'))
     .version('1.0.0')
+    .addHelpText('after', () => {
+        const dim = chalk.dim
+        const cyan = chalk.cyan
+        const bold = chalk.bold
+        const green = chalk.green
+        const yellow = chalk.yellow
+
+        return `
+${bold('━━━ COMMAND GROUPS ━━━')}
+
+  ${bold.cyan('🔐 Authentication')}
+    ${green('lvt login')}              Đăng nhập qua browser (Device Auth)
+    ${green('lvt login --token')} ${dim('<t>')}   Đăng nhập bằng PAT trực tiếp
+    ${green('lvt logout')}             Đăng xuất
+    ${green('lvt whoami')}             Xem thông tin tài khoản + thống kê
+
+  ${bold.cyan('📋 Tasks & Daily')}
+    ${green('lvt tasks')}              Danh sách tất cả tasks
+    ${green('lvt tasks add')} ${dim('"Tên"')}    Tạo task mới
+    ${green('lvt tasks done')} ${dim('<id>')}    Đánh dấu hoàn thành
+    ${green('lvt daily')}              Checklist hôm nay
+    ${green('lvt daily tomorrow')}     Checklist ngày mai
+
+  ${bold.cyan('💰 Finance')}
+    ${green('lvt income')}             Thu nhập tháng này
+    ${green('lvt income total')}       Tổng thu nhập
+    ${green('lvt stats')}              Dashboard tổng quan
+    ${green('lvt performance')}        Biểu đồ hiệu suất 6 tháng
+
+  ${bold.cyan('🛠  Tools')}
+    ${green('lvt notes')}              Ghi chú / Canvas notes
+    ${green('lvt notes add')} ${dim('"Tên"')}   Tạo ghi chú mới
+    ${green('lvt ai')} ${dim('"prompt"')}        Sinh checklist bằng AI
+    ${green('lvt config')}             Xem / sửa config
+
+${bold('━━━ EXAMPLES ━━━')}
+
+  ${dim('$')} ${cyan('lvt tasks add "Design homepage" --price 500000')}
+  ${dim('$')} ${cyan('lvt income --format json')}
+  ${dim('$')} ${cyan('lvt ai "Lên kế hoạch học React trong 1 tuần"')}
+  ${dim('$')} ${cyan('lvt config set apiUrl https://lvtspace.me')}
+
+${bold('━━━ MORE INFO ━━━')}
+
+  ${dim('Docs:')}    ${yellow('https://lvtspace.me/settings')} → tab Developer
+  ${dim('Version:')} ${dim(program.version() || '1.0.0')}
+  ${dim('Config:')}  ${dim(config.path)}
+`
+    })
 
 // Config command
 program

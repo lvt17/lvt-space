@@ -57,9 +57,6 @@ router.get('/stats', async (req, res) => {
   const paidThisMonth = parseInt(ts.paid_this_month) || 0
   const allTasksThisMonth = parseInt(ts.all_tasks_this_month) || 0
 
-  const paidTotal = parseInt(ts.paid_total) || 0
-  const incomeThisMonth = parseInt(allIncomeStats.rows[0].total_income_this_month) || 0
-
   res.json({
     totalTasks,
     completedTasks,
@@ -67,7 +64,7 @@ router.get('/stats', async (req, res) => {
     monthlyIncome: monthlyIncome + paidThisMonth,
     monthlyTotalIncome: allTasksThisMonth + monthlyIncome,
     unpaidTotal: parseInt(ts.unpaid_total) || 0,
-    totalIncome: paidThisMonth + incomeThisMonth,
+    totalIncome: allTasksThisMonth + monthlyIncome,
     completionRate,
     monthlyTrend: monthlyTrend.rows.map(r => ({
       name: r.name,
