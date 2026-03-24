@@ -224,16 +224,21 @@ export default function LandingPage() {
                         {t.hero.subtitle}
                     </p>
                     {/* Platform badges */}
+                    <style>{`
+                        @keyframes float-a { 0%,100%{transform:translate(0,0)} 25%{transform:translate(3px,-4px)} 50%{transform:translate(-2px,-6px)} 75%{transform:translate(-4px,-2px)} }
+                        @keyframes float-b { 0%,100%{transform:translate(0,0)} 25%{transform:translate(-4px,-3px)} 50%{transform:translate(2px,-5px)} 75%{transform:translate(5px,-1px)} }
+                        @keyframes float-c { 0%,100%{transform:translate(0,0)} 25%{transform:translate(2px,-5px)} 50%{transform:translate(4px,-2px)} 75%{transform:translate(-3px,-4px)} }
+                    `}</style>
                     <div className="flex items-center justify-center gap-5 mb-10">
                         {[
-                            { icon: <FiLayout />, label: 'Web UI', color: '#3B82F6', glow: '#3B82F6' },
-                            { icon: <FiTerminal />, label: 'CLI', color: '#10B981', glow: '#10B981' },
-                            { icon: <FiZap />, label: 'MCP', color: '#A855F7', glow: '#A855F7' },
+                            { icon: <FiLayout />, label: 'Web UI', color: '#3B82F6', glow: '#3B82F6', anim: 'float-a 6s ease-in-out infinite' },
+                            { icon: <FiTerminal />, label: 'CLI', color: '#10B981', glow: '#10B981', anim: 'float-b 7s ease-in-out infinite 0.5s' },
+                            { icon: <FiZap />, label: 'MCP', color: '#A855F7', glow: '#A855F7', anim: 'float-c 8s ease-in-out infinite 1s' },
                         ].map((b, i) => (
                             <div
                                 key={i}
                                 className="group relative cursor-default"
-                                style={{ perspective: '600px' }}
+                                style={{ perspective: '600px', animation: b.anim }}
                             >
                                 {/* Glow behind */}
                                 <div
