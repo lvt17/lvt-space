@@ -371,6 +371,64 @@ export default function LandingPage() {
                 </div>
             </section>
 
+            {/* ─── CLI / Terminal ─── */}
+            <section className="relative py-24">
+                <div className="max-w-6xl mx-auto px-6">
+                    <div className="text-center mb-16">
+                        <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight mb-4">
+                            {lang === 'vi' ? 'Quản lý từ Terminal' : 'Manage from Terminal'}
+                        </h2>
+                        <p className="text-lg text-white/40 max-w-xl mx-auto">
+                            {lang === 'vi'
+                                ? 'Cài CLI qua GitHub, đăng nhập và quản lý mọi thứ ngay trên terminal.'
+                                : 'Install via GitHub, login and manage everything right from your terminal.'}
+                        </p>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+                        {/* Terminal mockup */}
+                        <div className="rounded-2xl bg-[#1a1a2e] border border-white/[0.08] overflow-hidden shadow-2xl shadow-purple-500/5">
+                            <div className="flex items-center gap-2 px-4 py-3 bg-white/[0.03] border-b border-white/[0.06]">
+                                <div className="w-3 h-3 rounded-full bg-red-400/80" />
+                                <div className="w-3 h-3 rounded-full bg-yellow-400/80" />
+                                <div className="w-3 h-3 rounded-full bg-green-400/80" />
+                                <span className="ml-2 text-xs text-white/30 font-mono">Terminal</span>
+                            </div>
+                            <div className="p-5 font-mono text-sm space-y-2">
+                                <p className="text-white/40"># Cài đặt CLI</p>
+                                <p><span className="text-emerald-400">$</span> <span className="text-white/80">git clone https://github.com/lvt17/lvt-space.git</span></p>
+                                <p><span className="text-emerald-400">$</span> <span className="text-white/80">cd lvt-space/cli && npm install && npm link</span></p>
+                                <p className="text-white/20 pt-1"># Đăng nhập & sử dụng</p>
+                                <p><span className="text-emerald-400">$</span> <span className="text-white/80">lvt login</span></p>
+                                <p className="text-emerald-400/70">  ✓ Đã đăng nhập thành công!</p>
+                                <p><span className="text-emerald-400">$</span> <span className="text-white/80">lvt whoami</span></p>
+                                <p className="text-cyan-400/70">  👤 Liêu Vĩnh Toàn · 📋 5/23 tasks · 💰 21.500.000₫</p>
+                                <p><span className="text-emerald-400">$</span> <span className="text-white/80">lvt stats</span></p>
+                                <p className="text-purple-400/70">  📊 Dashboard — xem ngay trên terminal!</p>
+                            </div>
+                        </div>
+
+                        {/* Features list */}
+                        <div className="flex flex-col justify-center space-y-5">
+                            {[
+                                { icon: '📋', title: lang === 'vi' ? 'Quản lý tasks' : 'Task Management', desc: lang === 'vi' ? 'Thêm, sửa, xoá, đánh dấu hoàn thành từ terminal' : 'Add, edit, delete, mark complete from terminal' },
+                                { icon: '💰', title: lang === 'vi' ? 'Theo dõi thu nhập' : 'Income Tracking', desc: lang === 'vi' ? 'Xem thu nhập, thống kê, biểu đồ hiệu suất' : 'View income, stats, performance charts' },
+                                { icon: '📒', title: lang === 'vi' ? 'Ghi chú & Checklist' : 'Notes & Checklists', desc: lang === 'vi' ? 'Xem, toggle check, tạo note mới ngay từ CLI' : 'View, toggle, create notes from CLI' },
+                                { icon: '🤖', title: lang === 'vi' ? 'MCP / AI Agent' : 'MCP / AI Agent', desc: lang === 'vi' ? 'Kết nối AI Agent để điều khiển bằng ngôn ngữ tự nhiên' : 'Connect AI agents to control with natural language' },
+                            ].map((f, i) => (
+                                <div key={i} className="flex items-start gap-4 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] transition-all">
+                                    <span className="text-2xl shrink-0 mt-0.5">{f.icon}</span>
+                                    <div>
+                                        <h4 className="font-bold text-white/90 mb-1">{f.title}</h4>
+                                        <p className="text-sm text-white/40">{f.desc}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             {/* ─── Social Proof ─── */}
             <section className="relative py-16">
                 <div className="max-w-4xl mx-auto px-6">

@@ -469,6 +469,54 @@ export default function SettingsPage() {
                             </div>
                         )}
 
+                        {/* ═══ Section: Security — Connect CLI ═══ */}
+                        {activeSection === 'security' && (
+                            <div className="space-y-5" style={{ marginTop: '1.25rem' }}>
+                                <div className="glass-card rounded-2xl md:rounded-3xl p-6 sm:p-8">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-9 h-9 bg-emerald-500/10 rounded-xl flex items-center justify-center">
+                                            <FiTerminal className="text-base text-emerald-500" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-base text-text-primary">Kết nối CLI & MCP</h3>
+                                            <p className="text-xs text-text-muted">Truy cập workspace từ terminal hoặc AI Agent</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div className="p-4 bg-surface border border-border rounded-xl">
+                                            <p className="text-sm font-semibold text-text-primary mb-3">🚀 Cài đặt nhanh (3 bước)</p>
+                                            <div className="space-y-3">
+                                                {[
+                                                    { step: '1', label: 'Clone repo', code: 'git clone https://github.com/lvt17/lvt-space.git && cd lvt-space/cli' },
+                                                    { step: '2', label: 'Cài đặt & link', code: 'npm install && npm link' },
+                                                    { step: '3', label: 'Đăng nhập', code: 'lvt login' },
+                                                ].map(s => (
+                                                    <div key={s.step} className="flex items-start gap-3">
+                                                        <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary mt-0.5">{s.step}</span>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-xs font-medium text-text-secondary mb-1">{s.label}</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <code className="flex-1 bg-background border border-border rounded-lg px-3 py-1.5 text-[0.65rem] font-mono text-primary truncate">{s.code}</code>
+                                                                <button onClick={() => navigator.clipboard.writeText(s.code)} className="shrink-0 p-1.5 rounded-lg bg-surface hover:bg-surface-hover border border-border transition-colors cursor-pointer"><FiCopy className="text-xs text-text-muted" /></button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl">
+                                            <p className="text-xs text-text-secondary">
+                                                <strong className="text-text-primary">Sau khi đăng nhập:</strong> Dùng <code className="bg-surface px-1 rounded text-primary">lvt whoami</code> để kiểm tra kết nối.  
+                                                Xem tab <span className="text-primary font-semibold cursor-pointer" onClick={() => setActiveSection('developer')}>Developer</span> để xem danh sách lệnh đầy đủ.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* ═══ Section: Developer ═══ */}
                         {activeSection === 'developer' && (
                             <div className="space-y-5">
@@ -490,21 +538,27 @@ export default function SettingsPage() {
                                         {[
                                             {
                                                 step: 1,
-                                                title: 'Cài đặt CLI',
-                                                code: 'npm install -g @lvt17/lvt-cli',
-                                                desc: 'Cài đặt toàn cục, dùng lệnh lvt ở bất kỳ đâu',
+                                                title: 'Clone từ GitHub',
+                                                code: 'git clone https://github.com/lvt17/lvt-space.git',
+                                                desc: 'Clone toàn bộ project về máy',
                                             },
                                             {
                                                 step: 2,
+                                                title: 'Cài đặt & Link',
+                                                code: 'cd lvt-space/cli && npm install && npm link',
+                                                desc: 'Cài dependencies và link lệnh lvt toàn cục',
+                                            },
+                                            {
+                                                step: 3,
                                                 title: 'Đăng nhập',
                                                 code: 'lvt login',
                                                 desc: 'Mở trình duyệt → đăng nhập → token tự động lưu',
                                             },
                                             {
-                                                step: 3,
+                                                step: 4,
                                                 title: 'Bắt đầu sử dụng',
-                                                code: 'lvt tasks',
-                                                desc: 'Xem danh sách tasks. Chạy lvt --help để xem tất cả lệnh',
+                                                code: 'lvt help',
+                                                desc: 'Xem tất cả lệnh và ví dụ chi tiết',
                                             },
                                         ].map(s => (
                                             <div key={s.step} className="flex gap-4">
@@ -642,16 +696,26 @@ export default function SettingsPage() {
                                         <h3 className="font-bold text-base text-text-primary">Lịch sử cập nhật</h3>
                                         <p className="text-xs text-text-muted">Các tính năng mới và cải tiến</p>
                                     </div>
-                                    <span className="ml-auto text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">v1.3.0</span>
+                                    <span className="ml-auto text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">v1.4.0</span>
                                 </div>
 
                                 <div className="space-y-0">
                                     {[
                                         {
-                                            version: 'v1.3.0',
-                                            date: '15/03/2026',
+                                            version: 'v1.4.0',
+                                            date: '25/03/2026',
                                             tag: 'Mới nhất',
                                             tagColor: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+                                            changes: [
+                                                'CLI — Quản lý workspace từ terminal (tasks, income, notes, stats)',
+                                                'MCP Skill — Kết nối AI Agent để điều khiển bằng ngôn ngữ tự nhiên',
+                                            ],
+                                        },
+                                        {
+                                            version: 'v1.3.0',
+                                            date: '15/03/2026',
+                                            tag: '',
+                                            tagColor: '',
                                             changes: [
                                                 'Hệ thống thông báo Toast + chuông thông báo',
                                                 'Nhắc nhở deadline tự động (trước 1 ngày & đúng hạn)',
@@ -819,7 +883,7 @@ export default function SettingsPage() {
                                 {/* About */}
                                 <div className="glass-card rounded-2xl md:rounded-3xl px-6 sm:px-8 py-7">
                                     <div className="max-w-lg mx-auto">
-                                        <p className="text-xs font-bold text-primary tracking-wide text-center">LVT SPACE · v1.3.0</p>
+                                        <p className="text-xs font-bold text-primary tracking-wide text-center">LVT SPACE · v1.4.0</p>
 
                                         <p className="text-sm text-text-secondary mt-4 leading-relaxed">
                                             Lvt Space là một Workspace Suite được thiết kế để giúp bạn tổ chức công việc, theo dõi thu nhập và ghi chú ý tưởng — tất cả trong một giao diện duy nhất, tối giản và hiện đại.
