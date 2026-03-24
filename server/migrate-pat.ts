@@ -15,6 +15,16 @@ CREATE TABLE IF NOT EXISTS personal_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_personal_tokens_user ON personal_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_personal_tokens_hash ON personal_tokens(token_hash);
+
+CREATE TABLE IF NOT EXISTS cli_auth_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code VARCHAR(64) NOT NULL UNIQUE,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  token TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_cli_auth_code ON cli_auth_sessions(code);
 `
 
 async function migrate() {

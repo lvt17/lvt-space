@@ -4,50 +4,30 @@ import pool from '../db.js'
 
 const router = Router()
 
-// In-memory store for pending CLI auth sessions (short-lived)
-const pendingSessions = new Map<string, {
-    createdAt: number
-    userId?: string
-    token?: string
-    status: 'pending' | 'authorized'
-}>()
-
-// Cleanup expired sessions every 5 minutes
-setInterval(() => {
-    const now = Date.now()
-    for (const [code, session] of pendingSessions) {
-        if (now - session.createdAt > 10 * 60 * 1000) { // 10 min TTL
-            pendingSessions.delete(code)
-        }
-    }
-}, 5 * 60 * 1000)
-
 /**
  * Step 1: CLI requests a session code (no auth needed)
  * POST /api/cli-auth/request
- * Returns { code, loginUrl }
  */
-router.post('/request', (_req, res) => {
+router.post('/request', async (_req, res) => {
     const code = crypto.randomBytes(16).toString('hex')
 
-    pendingSessions.set(code, {
-        createdAt: Date.now(),
-        status: 'pending',
-    })
+    await pool.query(
+        `INSERT INTO cli_auth_sessions (code, status, created_at)
+         VALUES ($1, 'pending', NOW())`,
+        [code]
+    )
 
     const baseUrl = process.env.APP_URL || 'https://lvtspace.me'
     res.json({
         code,
         loginUrl: `${baseUrl}/cli-auth?code=${code}`,
-        expiresIn: 600, // 10 minutes
+        expiresIn: 600,
     })
 })
 
 /**
  * Step 2: Web frontend confirms auth (requires Supabase JWT)
  * POST /api/cli-auth/authorize
- * Body: { code }
- * Creates a PAT and links it to the session
  */
 router.post('/authorize', async (req, res) => {
     const authHeader = req.headers.authorization
@@ -55,7 +35,6 @@ router.post('/authorize', async (req, res) => {
         return res.status(401).json({ error: 'Supabase auth required' })
     }
 
-    // Verify Supabase JWT
     const { createClient } = await import('@supabase/supabase-js')
     const supabaseUrl = process.env.VITE_SUPABASE_URL
     const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY
@@ -73,9 +52,14 @@ router.post('/authorize', async (req, res) => {
     }
 
     const { code } = req.body
-    const session = pendingSessions.get(code)
 
-    if (!session || session.status !== 'pending') {
+    // Verify session exists and is pending
+    const { rows } = await pool.query(
+        `SELECT * FROM cli_auth_sessions WHERE code = $1 AND status = 'pending'
+         AND created_at > NOW() - INTERVAL '10 minutes'`,
+        [code]
+    )
+    if (!rows.length) {
         return res.status(400).json({ error: 'Invalid or expired session code' })
     }
 
@@ -90,10 +74,11 @@ router.post('/authorize', async (req, res) => {
         [data.user.id, 'CLI Login', tokenPrefix, tokenHash, ['read', 'write']]
     )
 
-    // Mark session as authorized
-    session.status = 'authorized'
-    session.userId = data.user.id
-    session.token = rawToken
+    // Mark session as authorized with the token
+    await pool.query(
+        `UPDATE cli_auth_sessions SET status = 'authorized', token = $1 WHERE code = $2`,
+        [rawToken, code]
+    )
 
     res.json({ ok: true })
 })
@@ -102,21 +87,27 @@ router.post('/authorize', async (req, res) => {
  * Step 3: CLI polls for token (no auth needed)
  * GET /api/cli-auth/poll?code=xxx
  */
-router.get('/poll', (req, res) => {
+router.get('/poll', async (req, res) => {
     const code = req.query.code as string
-    const session = pendingSessions.get(code)
+    if (!code) return res.status(400).json({ error: 'Missing code' })
 
-    if (!session) {
+    const { rows } = await pool.query(
+        `SELECT status, token FROM cli_auth_sessions
+         WHERE code = $1 AND created_at > NOW() - INTERVAL '10 minutes'`,
+        [code]
+    )
+
+    if (!rows.length) {
         return res.status(404).json({ status: 'expired' })
     }
 
-    if (session.status === 'pending') {
+    if (rows[0].status === 'pending') {
         return res.json({ status: 'pending' })
     }
 
-    // Authorized — return token and cleanup
-    const token = session.token
-    pendingSessions.delete(code)
+    // Authorized — return token and delete session
+    const token = rows[0].token
+    await pool.query('DELETE FROM cli_auth_sessions WHERE code = $1', [code])
     res.json({ status: 'authorized', token })
 })
 
