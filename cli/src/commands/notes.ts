@@ -175,7 +175,10 @@ export function registerNotesCommands(program: Command) {
                 const item = note.items[idx]
                 const newState = !item.is_checked
                 const icon = newState ? chalk.green('☑') : chalk.dim('☐')
-                success(`${icon} ${item.text} → ${newState ? 'done' : 'undone'}`)
+                console.log(`${icon} ${item.text} → ${newState ? 'done' : 'undone'}`)
+
+                // Auto-refresh the note view
+                await showNote(resolvedId)
             } catch (err) {
                 error(err instanceof Error ? err.message : 'Lỗi')
             }
