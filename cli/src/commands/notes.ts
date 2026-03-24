@@ -29,17 +29,49 @@ const colorMap: Record<string, (s: string) => string> = {
     amber: chalk.yellow,
     red: chalk.red,
     blue: chalk.blue,
+    teal: chalk.cyan,
+}
+
+// Cache notes list for index-based lookup
+let cachedNotes: ChecklistRow[] = []
+
+async function resolveNoteId(idOrIndex: string): Promise<string> {
+    // If it looks like a UUID, use directly
+    if (idOrIndex.length > 6) return idOrIndex
+
+    // If it's a number, fetch list and resolve by index
+    const idx = parseInt(idOrIndex)
+    if (!isNaN(idx) && idx > 0) {
+        if (!cachedNotes.length) {
+            cachedNotes = await api<ChecklistRow[]>('/api/checklists')
+        }
+        if (idx <= cachedNotes.length) {
+            return cachedNotes[idx - 1].id
+        }
+        throw new Error(`Không tìm thấy ghi chú #${idx}. Có ${cachedNotes.length} ghi chú.`)
+    }
+
+    return idOrIndex
 }
 
 export function registerNotesCommands(program: Command) {
     const notes = program
         .command('notes')
         .description('Quản lý ghi chú / canvas notes')
+        .argument('[id]', 'Xem ghi chú theo số thứ tự hoặc ID')
         .option('-f, --format <format>', 'Output format')
-        .action(async (opts) => {
+        .action(async (id, opts) => {
             try {
+                // If ID provided, show that note directly
+                if (id) {
+                    const noteId = await resolveNoteId(id)
+                    await showNote(noteId)
+                    return
+                }
+
                 const format = opts.format || config.get('format')
                 const data = await api<ChecklistRow[]>('/api/checklists')
+                cachedNotes = data
 
                 if (format === 'json') {
                     console.log(JSON.stringify(data, null, 2))
@@ -52,19 +84,24 @@ export function registerNotesCommands(program: Command) {
                 }
 
                 console.log(formatTable(
-                    ['#', 'Tiêu đề', 'Loại', 'Màu', 'Cập nhật'],
+                    ['#', 'Tiêu đề', 'Loại', 'Màu', 'Items', 'Cập nhật'],
                     data.map((n, i) => {
                         const colorFn = colorMap[n.color] || chalk.white
+                        const itemCount = n.type === 'checklist' && n.items
+                            ? `${n.items.filter(it => it.is_checked).length}/${n.items.length}`
+                            : '—'
                         return [
-                            String(i + 1),
+                            chalk.dim(String(i + 1)),
                             colorFn(n.title),
                             n.type === 'checklist' ? '📋' : '📝',
                             colorFn('●') + ' ' + n.color,
+                            itemCount,
                             formatDate(n.updated_at),
                         ]
                     }),
                     `📒 Ghi chú (${data.length})`,
                 ))
+                console.log(chalk.dim('\n  Tip: lvt notes <số> để xem chi tiết'))
             } catch (err) {
                 error(err instanceof Error ? err.message : 'Lỗi')
             }
@@ -75,26 +112,8 @@ export function registerNotesCommands(program: Command) {
         .description('Xem chi tiết ghi chú')
         .action(async (id) => {
             try {
-                const note = await api<ChecklistRow>(`/api/checklists/${id}`)
-                const colorFn = colorMap[note.color] || chalk.white
-
-                console.log()
-                console.log(colorFn('━'.repeat(40)))
-                console.log(chalk.bold(colorFn(`  ${note.title}`)))
-                if (note.description) console.log(chalk.dim(`  ${note.description}`))
-                console.log(colorFn('━'.repeat(40)))
-
-                if (note.type === 'checklist' && note.items?.length) {
-                    note.items.forEach(item => {
-                        const indent = '  '.repeat(item.indent_level + 1)
-                        const icon = item.is_checked ? chalk.green('☑') : chalk.dim('☐')
-                        const text = item.is_checked ? chalk.dim.strikethrough(item.text) : item.text
-                        console.log(`${indent}${icon} ${text}`)
-                    })
-                } else if (note.content) {
-                    console.log(`  ${note.content}`)
-                }
-                console.log()
+                const noteId = await resolveNoteId(id)
+                await showNote(noteId)
             } catch (err) {
                 error(err instanceof Error ? err.message : 'Lỗi')
             }
@@ -103,7 +122,7 @@ export function registerNotesCommands(program: Command) {
     notes
         .command('add <title>')
         .description('Tạo ghi chú mới')
-        .option('-c, --color <color>', 'Màu (purple/green/amber/red/blue)', 'purple')
+        .option('-c, --color <color>', 'Màu (purple/green/amber/red/blue/teal)', 'purple')
         .option('-t, --type <type>', 'Loại (checklist/text)', 'text')
         .option('--content <content>', 'Nội dung (cho type=text)')
         .action(async (title, opts) => {
@@ -124,6 +143,45 @@ export function registerNotesCommands(program: Command) {
         })
 
     notes
+        .command('check <noteId> <itemIndex>')
+        .description('Toggle check/uncheck item trong checklist')
+        .action(async (noteId, itemIndex) => {
+            try {
+                const resolvedId = await resolveNoteId(noteId)
+                const note = await api<ChecklistRow>(`/api/checklists/${resolvedId}`)
+
+                if (note.type !== 'checklist' || !note.items?.length) {
+                    error('Ghi chú này không phải checklist hoặc chưa có items.')
+                    return
+                }
+
+                const idx = parseInt(itemIndex) - 1
+                if (idx < 0 || idx >= note.items.length) {
+                    error(`Item index phải từ 1 đến ${note.items.length}`)
+                    return
+                }
+
+                // Toggle checked state
+                const updatedItems = note.items.map((item, i) => {
+                    if (i === idx) return { ...item, is_checked: !item.is_checked }
+                    return item
+                })
+
+                await api<ChecklistRow>(`/api/checklists/${resolvedId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ items: updatedItems }),
+                })
+
+                const item = note.items[idx]
+                const newState = !item.is_checked
+                const icon = newState ? chalk.green('☑') : chalk.dim('☐')
+                success(`${icon} ${item.text} → ${newState ? 'done' : 'undone'}`)
+            } catch (err) {
+                error(err instanceof Error ? err.message : 'Lỗi')
+            }
+        })
+
+    notes
         .command('update <id>')
         .description('Cập nhật ghi chú')
         .option('-t, --title <title>', 'Tiêu đề mới')
@@ -131,12 +189,13 @@ export function registerNotesCommands(program: Command) {
         .option('--content <content>', 'Nội dung mới')
         .action(async (id, opts) => {
             try {
+                const resolvedId = await resolveNoteId(id)
                 const body: Record<string, unknown> = {}
                 if (opts.title) body.title = opts.title
                 if (opts.color) body.color = opts.color
                 if (opts.content) body.content = opts.content
 
-                const note = await api<ChecklistRow>(`/api/checklists/${id}`, {
+                const note = await api<ChecklistRow>(`/api/checklists/${resolvedId}`, {
                     method: 'PUT',
                     body: JSON.stringify(body),
                 })
@@ -151,10 +210,40 @@ export function registerNotesCommands(program: Command) {
         .description('Xóa ghi chú')
         .action(async (id) => {
             try {
-                await api<void>(`/api/checklists/${id}`, { method: 'DELETE' })
+                const resolvedId = await resolveNoteId(id)
+                await api<void>(`/api/checklists/${resolvedId}`, { method: 'DELETE' })
                 success('Ghi chú đã xóa!')
             } catch (err) {
                 error(err instanceof Error ? err.message : 'Lỗi')
             }
         })
+}
+
+async function showNote(noteId: string) {
+    const note = await api<ChecklistRow>(`/api/checklists/${noteId}`)
+    const colorFn = colorMap[note.color] || chalk.white
+
+    console.log()
+    console.log(colorFn('━'.repeat(50)))
+    console.log(chalk.bold(colorFn(`  ${note.title}`)))
+    if (note.description) console.log(chalk.dim(`  ${note.description}`))
+    console.log(colorFn('━'.repeat(50)))
+
+    if (note.type === 'checklist' && note.items?.length) {
+        console.log()
+        note.items.forEach((item, i) => {
+            const indent = '  '.repeat(item.indent_level + 1)
+            const icon = item.is_checked ? chalk.green('☑') : chalk.dim('☐')
+            const text = item.is_checked ? chalk.dim.strikethrough(item.text) : item.text
+            const num = chalk.dim(`${i + 1}.`)
+            console.log(`${indent}${num} ${icon} ${text}`)
+        })
+        const done = note.items.filter(it => it.is_checked).length
+        console.log()
+        console.log(chalk.dim(`  ${done}/${note.items.length} hoàn thành`))
+        console.log(chalk.dim(`\n  Tip: lvt notes check <noteId> <itemNumber> để toggle`))
+    } else if (note.content) {
+        console.log(`  ${note.content}`)
+    }
+    console.log()
 }
