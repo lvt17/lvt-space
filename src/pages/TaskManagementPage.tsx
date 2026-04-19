@@ -3,17 +3,23 @@ import Header from '@/components/layout/Header'
 import { taskApi, type TaskRow } from '@/services/api'
 import { useDataCache } from '@/contexts/DataCacheContext'
 import { useToast } from '@/contexts/ToastContext'
-import { parseCurrency, formatVND } from '@/utils/currency'
-import { FiSearch, FiPlus, FiTrash2, FiRefreshCw, FiChevronLeft, FiChevronRight, FiZap, FiX, FiTerminal, FiEdit2, FiCheck, FiSettings, FiChevronDown, FiHelpCircle, FiFileText } from 'react-icons/fi'
+import { parseCurrency, formatVND, formatDualCurrency } from '@/utils/currency'
+import { useTranslation } from 'react-i18next'
+import { getUSDToVNDRate } from '@/services/exchangeRate'
+import { FiSearch, FiPlus, FiTrash2, FiRefreshCw, FiChevronLeft, FiChevronRight, FiZap, FiX, FiTerminal, FiEdit2, FiCheck, FiSettings, FiChevronDown, FiHelpCircle, FiFileText, FiDollarSign } from 'react-icons/fi'
 import RichTextEditorModal from '@/components/ui/RichTextEditorModal'
 
 /* ─── Server Status Options ─── */
-const SERVER_STATUSES = [
-    { value: 'pending', label: 'Đang chờ', emoji: '⏳' },
-    { value: 'in-progress', label: 'Đang làm', emoji: '🔧' },
-    { value: 'completed', label: 'Hoàn thành', emoji: '🎯' },
-    { value: 'done', label: 'Done + Paid', emoji: '✅' },
-] as const
+// Helper to get localized status labels
+const getStatusLabel = (t: any, status: string) => {
+    switch(status) {
+        case 'pending': return t('tasks.status.pending')
+        case 'in-progress': return t('tasks.status.processing')
+        case 'completed': return t('tasks.status.completed')
+        case 'cancelled': return t('tasks.status.cancelled')
+        default: return status
+    }
+}
 
 interface StatusMapping {
     keyword: string
@@ -51,13 +57,29 @@ const PAGE_SIZE = 10
 
 export default function TaskManagementPage() {
     const { tasks, setTasks, tasksLoading: loading, refreshTasks } = useDataCache()
+    const { t } = useTranslation()
     const { toast } = useToast()
+
+    const SERVER_STATUSES = useMemo(() => [
+        { value: 'pending', label: t('tasks.status.pending'), emoji: '⏳' },
+        { value: 'in-progress', label: t('tasks.status.processing'), emoji: '🔧' },
+        { value: 'completed', label: t('tasks.status.completed'), emoji: '🎯' },
+        { value: 'done', label: 'Done + Paid', emoji: '✅' },
+    ], [t])
+
+    const STATUS_OPTIONS = useMemo(() => [
+        { value: 'pending', label: t('tasks.status.pending') },
+        { value: 'in-progress', label: t('tasks.status.processing') },
+        { value: 'completed', label: t('tasks.status.completed') },
+        { value: 'paid', label: t('tasks.is_paid') },
+    ], [t])
     const [name, setName] = useState('')
     const todayVN = () => { const d = new Date(); return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` }
     const [deadline, setDeadline] = useState(todayVN())
     const [priceInput, setPriceInput] = useState('')
     const [description, setDescription] = useState('')
     const [showDescModal, setShowDescModal] = useState(false)
+    const [currency, setCurrency] = useState<'VND' | 'USD'>(() => (localStorage.getItem('task_currency') as 'VND' | 'USD') || 'VND')
     const [error, setError] = useState('')
     const [submitting, setSubmitting] = useState(false)
 
@@ -82,10 +104,13 @@ export default function TaskManagementPage() {
         }
         if (statusFilter !== 'all') {
             if (statusFilter === 'paid') {
-                result = result.filter(t => t.is_paid)
+                result = result.filter(t => t.is_paid || t.status === 'paid')
             } else {
                 result = result.filter(t => t.status === statusFilter)
             }
+        } else {
+            // Default 'all' now hides paid tasks
+            result = result.filter(t => !t.is_paid && t.status !== 'paid')
         }
         // Filter by created date range
         if (createdFrom) {
@@ -101,6 +126,13 @@ export default function TaskManagementPage() {
         if (deadlineTo) {
             result = result.filter(t => t.deadline && t.deadline.slice(0, 10) <= deadlineTo)
         }
+
+        // Filter by current month if no specific date range is set
+        if (!createdFrom && !createdTo && !search.trim()) {
+            const currentMonth = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).slice(0, 7)
+            result = result.filter(t => t.created_at && t.created_at.slice(0, 7) === currentMonth)
+        }
+
         return result
     }, [tasks, search, statusFilter, createdFrom, createdTo, deadlineFrom, deadlineTo])
 
@@ -141,10 +173,10 @@ export default function TaskManagementPage() {
         if (todayTasks.length > 0) {
             setTimeout(() => {
                 toast.warning(
-                    `⏰ Hôm nay là hạn chót!`,
+                    i18n.language === 'en' ? `⏰ Today is the deadline!` : `⏰ Hôm nay là hạn chót!`,
                     todayTasks.length === 1
-                        ? `"${todayTasks[0]}" cần hoàn thành hôm nay`
-                        : `${todayTasks.length} công việc cần hoàn thành: ${todayTasks.join(', ')}`,
+                        ? (i18n.language === 'en' ? `"${todayTasks[0]}" is due today` : `"${todayTasks[0]}" cần hoàn thành hôm nay`)
+                        : (i18n.language === 'en' ? `${todayTasks.length} tasks due today: ${todayTasks.join(', ')}` : `${todayTasks.length} công việc cần hoàn thành: ${todayTasks.join(', ')}`),
                     6000
                 )
             }, 1500)
@@ -154,10 +186,10 @@ export default function TaskManagementPage() {
         if (tomorrowTasks.length > 0) {
             setTimeout(() => {
                 toast.info(
-                    `📅 Deadline ngày mai`,
+                    i18n.language === 'en' ? `📅 Deadline tomorrow` : `📅 Deadline ngày mai`,
                     tomorrowTasks.length === 1
-                        ? `"${tomorrowTasks[0]}" sẽ đến hạn vào ngày mai`
-                        : `${tomorrowTasks.length} công việc sẽ đến hạn: ${tomorrowTasks.join(', ')}`,
+                        ? (i18n.language === 'en' ? `"${tomorrowTasks[0]}" is due tomorrow` : `"${tomorrowTasks[0]}" sẽ đến hạn vào ngày mai`)
+                        : (i18n.language === 'en' ? `${tomorrowTasks.length} tasks due tomorrow: ${tomorrowTasks.join(', ')}` : `${tomorrowTasks.length} công việc sẽ đến hạn: ${tomorrowTasks.join(', ')}`),
                     5000
                 )
             }, todayTasks.length > 0 ? 3500 : 1500)
@@ -168,11 +200,24 @@ export default function TaskManagementPage() {
         if (!name.trim() || submitting) return
         setSubmitting(true)
         try {
-            const price = parseCurrency(priceInput)
+            const original_amount = parseCurrency(priceInput)
+            let price = original_amount
+            if (currency === 'USD' && price > 0) {
+                const rate = await getUSDToVNDRate()
+                price = Math.round(price * rate)
+                toast.info(t('common.info', 'Info'), i18n.language === 'en' ? `Currency converted: $${original_amount} → ${formatVND(price)} (Rate: ${rate.toLocaleString()})` : `Đã quy đổi tiền tệ: $${original_amount} thành ${formatVND(price)} (Tỷ giá: ${rate.toLocaleString()})`)
+            }
             // Convert dd/mm/yyyy → yyyy-mm-dd for API
             const parts = deadline.split('/')
             const isoDeadline = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : undefined
-            const task = await taskApi.create({ name: name.trim(), deadline: isoDeadline, price, description: description || undefined })
+            const task = await taskApi.create({ 
+                name: name.trim(), 
+                deadline: isoDeadline, 
+                price, 
+                description: description || undefined,
+                currency,
+                original_amount
+            })
             setTasks(prev => [task, ...prev])
             setName('')
             setDeadline(todayVN())
@@ -285,6 +330,8 @@ export default function TaskManagementPage() {
                 deadline: editDeadline || undefined,
                 price: parseCurrency(editPrice),
                 description: editDescription || undefined,
+                currency: editingTask.currency,
+                original_amount: editingTask.currency === 'USD' ? parseCurrency(editPrice) : 0
             })
             setTasks(prev => prev.map(t => t.id === editingTask.id ? updated : t))
             setEditingTask(null)
@@ -341,28 +388,37 @@ export default function TaskManagementPage() {
         }
 
         // Price detection: 1m2 (1.2M), 2m (2M), 500k, 1.5m, etc.
+        const usdRegex = /(\$|usd)\s*(\d+(?:[.,]\d+)?)|(\d+(?:[.,]\d+)?)\s*(\$|usd)/i
         const compoundMRegex = /(\d+)\s*[mM]\s*(\d+)/
         const simplePriceRegex = /(\d+(?:[.,]\d+)?)\s*([kmKM])\b/
         const priceNumRegex = /\b(\d{4,})\b/
         let price = 0
+        let isUSD = false
         let mainWithoutPrice = mainPart
 
-        const compoundMatch = mainPart.match(compoundMRegex)
-        if (compoundMatch) {
-            price = parseInt(compoundMatch[1]) * 1000000 + parseInt(compoundMatch[2]) * 100000
-            mainWithoutPrice = mainPart.replace(compoundMatch[0], ' ')
+        const usdMatch = mainPart.match(usdRegex)
+        if (usdMatch) {
+            price = parseFloat((usdMatch[2] || usdMatch[3]).replace(',', '.'))
+            isUSD = true
+            mainWithoutPrice = mainPart.replace(usdMatch[0], ' ')
         } else {
-            const priceMatch = mainPart.match(simplePriceRegex)
-            if (priceMatch) {
-                const num = parseFloat(priceMatch[1].replace(',', '.'))
-                const unit = priceMatch[2].toLowerCase()
-                price = unit === 'k' ? num * 1000 : unit === 'm' ? num * 1000000 : num
-                mainWithoutPrice = mainPart.replace(priceMatch[0], ' ')
+            const compoundMatch = mainPart.match(compoundMRegex)
+            if (compoundMatch) {
+                price = parseInt(compoundMatch[1]) * 1000000 + parseInt(compoundMatch[2]) * 100000
+                mainWithoutPrice = mainPart.replace(compoundMatch[0], ' ')
             } else {
-                const numMatch = mainPart.match(priceNumRegex)
-                if (numMatch) {
-                    price = parseInt(numMatch[1])
-                    mainWithoutPrice = mainPart.replace(numMatch[0], ' ')
+                const priceMatch = mainPart.match(simplePriceRegex)
+                if (priceMatch) {
+                    const num = parseFloat(priceMatch[1].replace(',', '.'))
+                    const unit = priceMatch[2].toLowerCase()
+                    price = unit === 'k' ? num * 1000 : unit === 'm' ? num * 1000000 : num
+                    mainWithoutPrice = mainPart.replace(priceMatch[0], ' ')
+                } else {
+                    const numMatch = mainPart.match(priceNumRegex)
+                    if (numMatch) {
+                        price = parseInt(numMatch[1])
+                        mainWithoutPrice = mainPart.replace(numMatch[0], ' ')
+                    }
                 }
             }
         }
@@ -380,7 +436,7 @@ export default function TaskManagementPage() {
         }
 
         const taskName = mainWithoutPrice.replace(/\s+/g, ' ').trim()
-        return { name: taskName, price, deadline, status, isPaid, statusLabel: statusKey }
+        return { name: taskName, price, deadline, status, isPaid, statusLabel: statusKey, isUSD }
     }
 
     // Parse all lines for preview
@@ -397,10 +453,18 @@ export default function TaskManagementPage() {
             for (const line of lines) {
                 const parsed = parseRawInput(line)
                 if (!parsed || !parsed.name) continue
+                let finalPrice = parsed.price
+                if (parsed.isUSD && finalPrice > 0) {
+                    const rate = await getUSDToVNDRate()
+                    finalPrice = Math.round(finalPrice * rate)
+                }
+
                 const task = await taskApi.create({
                     name: parsed.name,
                     deadline: parsed.deadline || undefined,
-                    price: parsed.price,
+                    price: finalPrice,
+                    currency: parsed.isUSD ? 'USD' : 'VND',
+                    original_amount: parsed.price
                 })
                 let updated = task
                 if (parsed.status !== 'pending') {
@@ -424,8 +488,8 @@ export default function TaskManagementPage() {
     return (
         <>
             <Header
-                title="Quản lý công việc"
-                subtitle="Tổ chức các sản phẩm và theo dõi các khoản thanh toán đang chờ xử lý."
+                title={t('nav.tasks')}
+                subtitle={t('tasks.title')}
             />
 
             {error && (
@@ -442,7 +506,7 @@ export default function TaskManagementPage() {
                         <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
                             <FiPlus className="text-base text-white" />
                         </div>
-                        <h3 className="font-semibold text-base md:text-lg text-text-primary">Thêm công việc mới</h3>
+                        <h3 className="font-semibold text-base md:text-lg text-text-primary">{t('tasks.add_task')}</h3>
                     </div>
                     <button
                         onClick={() => setShowRawModal(true)}
@@ -454,18 +518,18 @@ export default function TaskManagementPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 sm:gap-4 md:gap-5 items-end">
                     <div className="sm:col-span-2 md:col-span-4">
-                        <label className="block text-xs font-semibold text-text-muted uppercase mb-2 ml-1">Tên công việc</label>
+                        <label className="block text-xs font-semibold text-text-muted uppercase mb-2 ml-1">{t('tasks.task_name')}</label>
                         <input
                             type="text"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
-                            placeholder=""
+                            placeholder={t('tasks.placeholder.name')}
                             className="w-full bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary placeholder:text-text-muted"
                         />
                     </div>
                     <div className="md:col-span-3">
-                        <label className="block text-xs font-semibold text-text-muted uppercase mb-2 ml-1">Hạn chót</label>
+                        <label className="block text-xs font-semibold text-text-muted uppercase mb-2 ml-1">{t('tasks.deadline')}</label>
                         <input
                             type="text"
                             value={deadline}
@@ -476,15 +540,34 @@ export default function TaskManagementPage() {
                         />
                     </div>
                     <div className="md:col-span-2">
-                        <label className="block text-xs font-semibold text-text-muted uppercase mb-2 ml-1">Giá (VNĐ)</label>
-                        <input
-                            type="text"
-                            value={priceInput}
-                            onChange={(e) => setPriceInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
-                            placeholder=""
-                            className="w-full bg-surface border border-border rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary placeholder:text-text-muted"
-                        />
+                        <label className="block text-xs font-semibold text-text-muted uppercase mb-2 ml-1">{t('tasks.price')}</label>
+                        <div className="relative group">
+                            {currency === 'USD' && (
+                                <FiDollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-primary text-sm z-10" />
+                            )}
+                            <input
+                                type="text"
+                                value={priceInput}
+                                onChange={(e) => setPriceInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
+                                placeholder={currency === 'USD' ? "0.00" : "0"}
+                                className={`w-full bg-surface border border-border rounded-xl ${currency === 'USD' ? 'pl-8' : 'px-4'} pr-20 py-3 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary placeholder:text-text-muted transition-all`}
+                            />
+                            <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex bg-surface-secondary rounded-lg p-0.5 border border-border shadow-inner z-10">
+                                <button
+                                    onClick={() => { setCurrency('VND'); localStorage.setItem('task_currency', 'VND') }}
+                                    className={`px-1.5 py-0.5 text-[10px] font-bold rounded-md transition-all ${currency === 'VND' ? 'bg-primary text-white shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+                                >
+                                    VND
+                                </button>
+                                <button
+                                    onClick={() => { setCurrency('USD'); localStorage.setItem('task_currency', 'USD') }}
+                                    className={`px-1.5 py-0.5 text-[10px] font-bold rounded-md transition-all ${currency === 'USD' ? 'bg-primary text-white shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+                                >
+                                    USD
+                                </button>
+                            </div>
+                        </div>
                     </div>
                     {/* Description button */}
                     <div className="flex items-end md:col-span-1">
@@ -511,7 +594,7 @@ export default function TaskManagementPage() {
                             ) : (
                                 <FiPlus className="text-lg" />
                             )}
-                            {submitting ? 'Đang tạo...' : 'Tạo công việc'}
+                            {submitting ? t('common.loading') : t('tasks.add_task')}
                         </button>
                     </div>
                 </div>
@@ -767,29 +850,36 @@ export default function TaskManagementPage() {
                     <div className="flex flex-col sm:flex-row gap-3">
                         {/* Search */}
                         <div className="relative flex-1">
-                            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted text-sm" />
+                            <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted text-base" />
                             <input
                                 type="text"
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
-                                placeholder="Tìm kiếm công việc..."
-                                className="w-full bg-surface border border-border rounded-xl pl-9 pr-4 py-2.5 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary placeholder:text-text-muted"
+                                placeholder={t('common.search')}
+                                className="w-full bg-surface-secondary border border-border rounded-xl pl-11 pr-4 py-3 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none text-sm text-text-primary placeholder:text-text-muted transition-all"
                             />
                         </div>
                         {/* Status filter */}
-                        <select
-                            value={statusFilter}
-                            onChange={e => setStatusFilter(e.target.value)}
-                            className="bg-surface border border-border rounded-xl px-4 py-2.5 text-sm text-text-primary cursor-pointer focus:ring-2 focus:ring-primary/30 outline-none"
-                        >
-                            <option value="all">Tất cả trạng thái</option>
-                            {STATUS_OPTIONS.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
-                        </select>
+                        <div className="flex gap-2 p-1 bg-surface-secondary border border-border rounded-xl">
+                            <button
+                                onClick={() => setStatusFilter('all')}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${statusFilter === 'all' ? 'bg-primary text-white shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+                            >
+                                {t('tasks.filter.all')}
+                            </button>
+                            <button
+                                onClick={() => setStatusFilter('paid')}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${statusFilter === 'paid' ? 'bg-primary text-white shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+                            >
+                                {t('tasks.filter.unpaid')}
+                            </button>
+                        </div>
                     </div>
                     {/* Date filters row */}
-                    <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
+                    <div className="flex flex-col sm:flex-row gap-3 items-center flex-wrap">
+                        <div className="h-4 w-px bg-border hidden sm:block mx-1"></div>
+                        
+                        <div className="h-4 w-px bg-border hidden sm:block mx-1"></div>
                         {/* Created date range */}
                         <div className="flex items-center gap-2">
                             <span className="text-xs font-semibold text-text-muted whitespace-nowrap">Ngày thêm:</span>
@@ -855,7 +945,9 @@ export default function TaskManagementPage() {
                                             {task.deadline ? new Date(task.deadline).toLocaleDateString('vi-VN') : 'Không hạn'}
                                         </p>
                                     </div>
-                                    <p className="font-bold text-sm text-text-primary">{formatVND(task.price)}</p>
+                                    <p className="font-bold text-sm text-text-primary">
+                                        {formatDualCurrency(task.price, task.currency === 'USD' ? task.original_amount : undefined)}
+                                    </p>
                                 </div>
                                 <div className="flex items-center justify-between gap-3">
                                     <select
@@ -889,13 +981,13 @@ export default function TaskManagementPage() {
                 <div className="hidden sm:block overflow-x-auto">
                     <table className="w-full text-left min-w-[36rem]">
                         <thead>
-                            <tr className="bg-surface-secondary">
-                                <th className="px-4 lg:px-6 py-3 lg:py-4 text-[0.6875rem] font-bold text-text-muted uppercase tracking-widest">Tên công việc</th>
-                                <th className="px-4 lg:px-6 py-3 lg:py-4 text-[0.6875rem] font-bold text-text-muted uppercase tracking-widest">Hạn chót</th>
-                                <th className="px-4 lg:px-6 py-3 lg:py-4 text-[0.6875rem] font-bold text-text-muted uppercase tracking-widest">Giá</th>
-                                <th className="px-4 lg:px-6 py-3 lg:py-4 text-[0.6875rem] font-bold text-text-muted uppercase tracking-widest">Trạng thái</th>
-                                <th className="px-4 lg:px-6 py-3 lg:py-4 text-[0.6875rem] font-bold text-text-muted uppercase tracking-widest">Đã TT</th>
-                                <th className="px-4 lg:px-6 py-3 lg:py-4 text-[0.6875rem] font-bold text-text-muted uppercase tracking-widest"></th>
+                            <tr className="text-[0.625rem] text-text-muted font-bold uppercase tracking-wider bg-surface-secondary">
+                                <th className="px-4 sm:px-6 py-3 sm:py-4">{t('tasks.task_name')}</th>
+                                <th className="px-4 sm:px-6 py-3 sm:py-4">{t('tasks.deadline')}</th>
+                                <th className="px-4 sm:px-6 py-3 sm:py-4">{t('tasks.price')}</th>
+                                <th className="px-4 sm:px-6 py-3 sm:py-4 text-center">{t('tasks.status_label')}</th>
+                                <th className="px-4 sm:px-6 py-3 sm:py-4 text-center">{t('tasks.is_paid')}</th>
+                                <th className="px-4 sm:px-6 py-3 sm:py-4 text-right">{t('common.actions')}</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border-light">
@@ -912,7 +1004,9 @@ export default function TaskManagementPage() {
                                         <td className="px-4 lg:px-6 py-4 lg:py-5 text-sm text-text-secondary">
                                             {task.deadline ? new Date(task.deadline).toLocaleDateString('vi-VN') : '—'}
                                         </td>
-                                        <td className="px-4 lg:px-6 py-4 lg:py-5 font-bold text-text-primary text-sm">{formatVND(task.price)}</td>
+                                        <td className="px-4 lg:px-6 py-4 lg:py-5 font-bold text-text-primary text-sm whitespace-nowrap">
+                                            {formatDualCurrency(task.price, task.currency === 'USD' ? task.original_amount : undefined)}
+                                        </td>
                                         <td className="px-4 lg:px-6 py-4 lg:py-5">
                                             <select
                                                 value={task.status}

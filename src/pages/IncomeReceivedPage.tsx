@@ -2,7 +2,11 @@ import { useState, useEffect, useMemo } from 'react'
 import Header from '@/components/layout/Header'
 
 import { incomeApi, type IncomeRow } from '@/services/api'
-import { parseCurrency, formatVND } from '@/utils/currency'
+import { parseCurrency, formatVND, formatDualCurrency } from '@/utils/currency'
+import { getUSDToVNDRate } from '@/services/exchangeRate'
+import { useToast } from '@/contexts/ToastContext'
+import { useTranslation } from 'react-i18next'
+import { FiDollarSign } from 'react-icons/fi'
 
 function getCurrentMonthVN() {
     const now = new Date()
@@ -10,28 +14,30 @@ function getCurrentMonthVN() {
     return `${vnDate.getFullYear()}-${String(vnDate.getMonth() + 1).padStart(2, '0')}`
 }
 
-function generateMonthOptions(count = 12) {
-    const options: { value: string; label: string }[] = []
-    const now = new Date()
-    const vnNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }))
-    for (let i = 0; i < count; i++) {
-        const d = new Date(vnNow.getFullYear(), vnNow.getMonth() - i, 1)
-        const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-        const label = `Tháng ${d.getMonth() + 1}/${d.getFullYear()}`
-        options.push({ value, label })
-    }
-    return options
-}
 
 export default function IncomeReceivedPage() {
+    const { t, i18n } = useTranslation()
     const currentMonth = useMemo(() => getCurrentMonthVN(), [])
-    const monthOptions = useMemo(() => generateMonthOptions(12), [])
+    const monthOptions = useMemo(() => {
+        const options: { value: string; label: string }[] = []
+        const now = new Date()
+        const vnNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }))
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(vnNow.getFullYear(), vnNow.getMonth() - i, 1)
+            const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+            const monthLabel = i18n.language === 'vi' ? `Tháng ${d.getMonth() + 1}` : `Month ${d.getMonth() + 1}`
+            const label = `${monthLabel}/${d.getFullYear()}`
+            options.push({ value, label })
+        }
+        return options
+    }, [i18n.language])
 
     const [selectedMonth, setSelectedMonth] = useState(currentMonth)
     const [records, setRecords] = useState<IncomeRow[]>([])
     const [totalCount, setTotalCount] = useState(0)
     const [page, setPage] = useState(1)
     const [monthlyTotal, setMonthlyTotal] = useState(0)
+    const [monthlyTotalUSD, setMonthlyTotalUSD] = useState(0)
     const [loading, setLoading] = useState(true)
     const limit = 10
 
@@ -40,6 +46,8 @@ export default function IncomeReceivedPage() {
     const [taskName, setTaskName] = useState('')
     const [category, setCategory] = useState('')
     const [amountInput, setAmountInput] = useState('')
+    const [currency, setCurrency] = useState<'VND' | 'USD'>(() => (localStorage.getItem('income_currency') as 'VND' | 'USD') || 'VND')
+    const { toast } = useToast()
 
     const isCurrentMonth = selectedMonth === currentMonth
 
@@ -52,6 +60,7 @@ export default function IncomeReceivedPage() {
             setRecords(pageData.records)
             setTotalCount(pageData.total)
             setMonthlyTotal(parseInt(String(monthly.total)) || 0)
+            setMonthlyTotalUSD(monthly.totalUSD || 0)
         }).finally(() => setLoading(false))
     }
 
@@ -62,10 +71,19 @@ export default function IncomeReceivedPage() {
     const handleAdd = async () => {
         if (!taskName.trim() || !amountInput.trim()) return
         try {
+            const original_amount = parseCurrency(amountInput)
+            let amount = original_amount
+            if (currency === 'USD' && amount > 0) {
+                const rate = await getUSDToVNDRate()
+                amount = Math.round(amount * rate)
+                toast?.info(t('common.info', 'Info'), i18n.language === 'en' ? `Currency converted: $${original_amount} → ${formatVND(amount)} (Rate: ${rate.toLocaleString()})` : `Đã quy đổi tiền tệ: $${original_amount} thành ${formatVND(amount)} (Tỷ giá: ${rate.toLocaleString()})`)
+            }
             const record = await incomeApi.create({
                 task_name: taskName.trim(),
                 category: category.trim() || undefined,
-                amount: parseCurrency(amountInput),
+                amount: amount,
+                currency,
+                original_amount
             })
             setRecords([record, ...records])
             setTotalCount(prev => prev + 1)
@@ -81,10 +99,10 @@ export default function IncomeReceivedPage() {
 
     return (
         <>
-            <Header title="Thu nhập đã nhận" />
+            <Header title={t('income.title')} />
 
             {loading ? (
-                <div className="text-center text-text-muted py-20">Đang tải...</div>
+                <div className="text-center text-text-muted py-20">{t('common.loading')}</div>
             ) : (
                 <>
                     {/* Summary */}
@@ -94,7 +112,7 @@ export default function IncomeReceivedPage() {
                                 <div>
                                     <div className="flex items-center gap-3 mb-1">
                                         <p className="text-text-muted text-xs sm:text-sm font-medium uppercase tracking-wider">
-                                            {isCurrentMonth ? 'Tổng thu nhập tháng này' : `Tổng thu nhập ${monthOptions.find(o => o.value === selectedMonth)?.label || ''}`}
+                                            {isCurrentMonth ? t('income.received_this_month') : `${t('income.received_this_month')} (${monthOptions.find(o => o.value === selectedMonth)?.label || ''})`}
                                         </p>
                                         <select
                                             value={selectedMonth}
@@ -106,11 +124,16 @@ export default function IncomeReceivedPage() {
                                             ))}
                                         </select>
                                     </div>
-                                    <h3 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-text-primary">
+                                    <h3 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-text-primary whitespace-nowrap">
                                         {formatVND(monthlyTotal)}
+                                        {monthlyTotalUSD > 0 && (
+                                            <span className="text-xl sm:text-2xl md:text-3xl text-text-muted ml-3 font-semibold">
+                                                ({monthlyTotalUSD.toLocaleString('en-US')}$)
+                                            </span>
+                                        )}
                                     </h3>
                                     <p className="text-text-muted text-xs sm:text-sm mt-2">
-                                        {totalCount} bản ghi {isCurrentMonth ? 'tháng này' : ''}
+                                        {totalCount} {i18n.language === 'vi' ? 'bản ghi' : 'records'} {isCurrentMonth ? (i18n.language === 'vi' ? 'tháng này' : 'this month') : ''}
                                     </p>
                                 </div>
                                 <button
@@ -118,7 +141,7 @@ export default function IncomeReceivedPage() {
                                     className="bg-primary hover:bg-primary-mid text-white px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-colors shadow-md shadow-primary/20 w-full sm:w-auto justify-center"
                                 >
                                     <span className="material-icons-round text-lg">add</span>
-                                    Thêm thu nhập
+                                    {t('income.add_income')}
                                 </button>
                             </div>
                         </div>
@@ -128,48 +151,67 @@ export default function IncomeReceivedPage() {
                     {/* Add income form */}
                     {showForm && (
                         <div className="glass-card rounded-2xl p-4 sm:p-6 mb-6 md:mb-8">
-                            <h4 className="font-semibold text-text-primary mb-4">Ghi nhận thu nhập mới</h4>
+                            <h4 className="font-semibold text-text-primary mb-4">{t('income.add_income')}</h4>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 sm:gap-4 items-end">
                                 <div className="sm:col-span-2 md:col-span-4">
-                                    <label className="block text-xs font-semibold text-text-muted uppercase mb-1 ml-1">Tên công việc</label>
+                                    <label className="block text-xs font-semibold text-text-muted uppercase mb-1 ml-1">{t('income.task_name')}</label>
                                     <input
                                         type="text"
                                         value={taskName}
                                         onChange={e => setTaskName(e.target.value)}
-                                        placeholder="VD: Website ABC"
+                                        placeholder={t('income.placeholder.task_name')}
                                         className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30 text-text-primary placeholder:text-text-muted"
                                     />
                                 </div>
                                 <div className="md:col-span-3">
-                                    <label className="block text-xs font-semibold text-text-muted uppercase mb-1 ml-1">Loại</label>
+                                    <label className="block text-xs font-semibold text-text-muted uppercase mb-1 ml-1">{t('income.category')}</label>
                                     <select
                                         value={category}
                                         onChange={e => setCategory(e.target.value)}
                                         className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30 text-text-primary"
                                     >
-                                        <option value="">Chọn loại</option>
-                                        <option value="Phí dịch vụ">Phí dịch vụ</option>
-                                        <option value="Tư vấn">Tư vấn</option>
-                                        <option value="Khác">Khác</option>
+                                        <option value="">{t('income.placeholder.category')}</option>
+                                        <option value="Phí dịch vụ">{i18n.language === 'vi' ? 'Phí dịch vụ' : 'Service Fee'}</option>
+                                        <option value="Tư vấn">{i18n.language === 'vi' ? 'Tư vấn' : 'Consulting'}</option>
+                                        <option value="Khác">{i18n.language === 'vi' ? 'Khác' : 'Others'}</option>
                                     </select>
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className="block text-xs font-semibold text-text-muted uppercase mb-1 ml-1">Số tiền</label>
-                                    <input
-                                        type="text"
-                                        value={amountInput}
-                                        onChange={e => setAmountInput(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && handleAdd()}
-                                        placeholder="VD: 1m5"
-                                        className="w-full bg-surface border border-border rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30 text-text-primary placeholder:text-text-muted"
-                                    />
+                                    <div className="relative group">
+                                        {currency === 'USD' && (
+                                            <FiDollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-primary text-sm z-10" />
+                                        )}
+                                        <input
+                                            type="text"
+                                            value={amountInput}
+                                            onChange={e => setAmountInput(e.target.value)}
+                                            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                                            placeholder={currency === 'USD' ? "0.00" : "1m5"}
+                                            className={`w-full bg-surface border border-border rounded-xl ${currency === 'USD' ? 'pl-8' : 'px-4'} pr-20 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/30 text-text-primary placeholder:text-text-muted transition-all`}
+                                        />
+                                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex bg-surface-secondary rounded-lg p-0.5 border border-border shadow-inner scale-90 origin-right z-10">
+                                            <button
+                                                onClick={() => { setCurrency('VND'); localStorage.setItem('income_currency', 'VND') }}
+                                                className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md transition-all ${currency === 'VND' ? 'bg-primary text-white shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+                                            >
+                                                VND
+                                            </button>
+                                            <button
+                                                onClick={() => { setCurrency('USD'); localStorage.setItem('income_currency', 'USD') }}
+                                                className={`px-1.5 py-0.5 text-[9px] font-bold rounded-md transition-all ${currency === 'USD' ? 'bg-primary text-white shadow-sm' : 'text-text-muted hover:text-text-primary'}`}
+                                            >
+                                                USD
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="sm:col-span-2 md:col-span-3 flex gap-2">
                                     <button onClick={handleAdd} className="flex-1 bg-primary hover:bg-primary-mid text-white font-bold py-2.5 rounded-xl text-sm transition-colors">
-                                        Lưu
+                                        {t('common.save')}
                                     </button>
                                     <button onClick={() => setShowForm(false)} className="px-4 py-2.5 text-text-muted hover:text-text-primary text-sm rounded-xl border border-border transition-colors">
-                                        Hủy
+                                        {t('common.cancel')}
                                     </button>
                                 </div>
                             </div>
@@ -180,7 +222,7 @@ export default function IncomeReceivedPage() {
                     <div className="glass-card rounded-2xl md:rounded-[2rem] overflow-hidden">
                         <div className="p-4 sm:p-6 border-b border-border flex items-center justify-between">
                             <h4 className="text-base md:text-lg font-bold text-text-primary">
-                                Công việc đã hoàn thành (Đã nhận tiền)
+                                {t('income.title')}
                             </h4>
                             <button onClick={loadData} className="text-text-muted hover:text-primary transition-colors">
                                 <span className="material-icons-round text-xl">refresh</span>
@@ -215,7 +257,9 @@ export default function IncomeReceivedPage() {
                                         </div>
                                         <div className="flex justify-between items-center text-xs">
                                             <span className="text-text-muted">{record.category || '—'} · {record.received_date ? new Date(record.received_date).toLocaleDateString('vi-VN') : '—'}</span>
-                                            <span className="font-bold text-text-primary">{formatVND(record.amount)}</span>
+                                            <span className="font-bold text-text-primary">
+                                                {formatDualCurrency(record.amount, record.currency === 'USD' ? record.original_amount : undefined)}
+                                            </span>
                                         </div>
                                     </div>
                                 ))
@@ -227,11 +271,11 @@ export default function IncomeReceivedPage() {
                             <table className="w-full text-left min-w-[36rem]">
                                 <thead>
                                     <tr className="text-[0.6875rem] font-bold text-text-muted uppercase tracking-widest border-b border-border bg-surface-secondary">
-                                        <th className="px-4 md:px-6 py-3 md:py-3">Tên công việc</th>
-                                        <th className="px-4 md:px-6 py-3 md:py-3">Loại</th>
-                                        <th className="px-4 md:px-6 py-3 md:py-3">Ngày nhận</th>
-                                        <th className="px-4 md:px-6 py-3 md:py-3">Số tiền</th>
-                                        <th className="px-4 md:px-6 py-3 md:py-3">Xoá</th>
+                                        <th className="px-4 md:px-6 py-3 md:py-3">{t('income.task_name')}</th>
+                                        <th className="px-4 md:px-6 py-3 md:py-3">{t('income.category')}</th>
+                                        <th className="px-4 md:px-6 py-3 md:py-3">{t('income.received_date')}</th>
+                                        <th className="px-4 md:px-6 py-3 md:py-3">{t('income.amount')}</th>
+                                        <th className="px-4 md:px-6 py-3 md:py-3 text-right">{t('common.actions')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border-light">
@@ -252,8 +296,8 @@ export default function IncomeReceivedPage() {
                                                 <td className="px-4 md:px-6 py-4 md:py-4 text-sm text-text-secondary">
                                                     {record.received_date ? new Date(record.received_date).toLocaleDateString('vi-VN') : '—'}
                                                 </td>
-                                                <td className="px-4 md:px-6 py-4 md:py-4 text-sm font-bold text-text-primary">
-                                                    {formatVND(record.amount)}
+                                                <td className="px-4 md:px-6 py-4 md:py-4 text-sm font-bold text-text-primary whitespace-nowrap">
+                                                    {formatDualCurrency(record.amount, record.currency === 'USD' ? record.original_amount : undefined)}
                                                 </td>
                                                 <td className="px-4 md:px-6 py-4 md:py-4">
                                                     <button
@@ -276,7 +320,7 @@ export default function IncomeReceivedPage() {
                         </div>
                         <div className="p-4 sm:p-6 bg-surface-secondary flex flex-col sm:flex-row items-start sm:items-center justify-between border-t border-border gap-3">
                             <p className="text-xs text-text-muted font-medium">
-                                Hiển thị {records.length} trên {totalCount} bản ghi
+                                {i18n.language === 'en' ? `Showing ${records.length} of ${totalCount} records` : `Hiển thị ${records.length} trên ${totalCount} bản ghi`}
                             </p>
                             <div className="flex gap-2">
                                 <button

@@ -15,14 +15,21 @@ router.get('/stats', async (req, res) => {
         COUNT(*) AS total_tasks,
         COUNT(*) FILTER (WHERE status = 'completed') AS completed_tasks,
         COUNT(*) FILTER (WHERE status IN ('pending', 'processing', 'in-progress')) AS active_tasks,
+        -- General Unpaid (all time)
         COALESCE(SUM(price) FILTER (WHERE is_paid = false), 0) AS unpaid_total,
-        COALESCE(SUM(price) FILTER (WHERE is_paid = true), 0) AS paid_total,
-        COALESCE(SUM(price) FILTER (WHERE is_paid = true AND date_trunc('month', (COALESCE(updated_at, created_at) AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))), 0) AS paid_this_month,
-        COALESCE(SUM(price) FILTER (WHERE date_trunc('month', (created_at AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))), 0) AS all_tasks_this_month
+        COALESCE(SUM(original_amount) FILTER (WHERE is_paid = false AND currency = 'USD'), 0) AS unpaid_total_usd,
+        -- Unpaid Created This Month
+        COALESCE(SUM(price) FILTER (WHERE is_paid = false AND date_trunc('month', (created_at AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))), 0) AS unpaid_this_month,
+        COALESCE(SUM(original_amount) FILTER (WHERE is_paid = false AND currency = 'USD' AND date_trunc('month', (created_at AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))), 0) AS unpaid_this_month_usd,
+        -- Paid This Month (using paid_at)
+        COALESCE(SUM(price) FILTER (WHERE is_paid = true AND date_trunc('month', (paid_at AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))), 0) AS paid_this_month,
+        COALESCE(SUM(original_amount) FILTER (WHERE is_paid = true AND currency = 'USD' AND date_trunc('month', (paid_at AT TIME ZONE '${TZ}')) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}'))), 0) AS paid_this_month_usd
       FROM tasks WHERE user_id = $1
     `, [userId]),
     pool.query(`
-      SELECT COALESCE(SUM(amount), 0) AS monthly_income
+      SELECT 
+        COALESCE(SUM(amount), 0) AS monthly_income,
+        COALESCE(SUM(original_amount) FILTER (WHERE currency = 'USD'), 0) AS monthly_income_usd
       FROM income_records
       WHERE user_id = $1 AND date_trunc('month', received_date) = date_trunc('month', (NOW() AT TIME ZONE '${TZ}')::date)
     `, [userId]),
@@ -53,18 +60,38 @@ router.get('/stats', async (req, res) => {
   const completedTasks = parseInt(ts.completed_tasks) || 0
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
 
-  const monthlyIncome = parseInt(incomeStats.rows[0].monthly_income) || 0
-  const paidThisMonth = parseInt(ts.paid_this_month) || 0
-  const allTasksThisMonth = parseInt(ts.all_tasks_this_month) || 0
+  const receivedFromRecords = parseInt(incomeStats.rows[0].monthly_income) || 0
+  const receivedFromRecordsUSD = parseFloat(incomeStats.rows[0].monthly_income_usd) || 0
+  const receivedFromTasks = parseInt(ts.paid_this_month) || 0
+  const receivedFromTasksUSD = parseFloat(ts.paid_this_month_usd) || 0
+  const totalUnpaidGlobal = parseInt(ts.unpaid_total) || 0
+  
+  // Card 2: "Đã nhận tháng này" (Sync with Income Page)
+  const actuallyReceivedThisMonth = receivedFromTasks + receivedFromRecords
+  const actuallyReceivedThisMonthUSD = receivedFromTasksUSD + receivedFromRecordsUSD
+  
+  // Totals for "Chưa thanh toán" card (all time)
+  const totalUnpaidGlobal = parseInt(ts.unpaid_total) || 0
+  const totalUnpaidGlobalUSD = parseFloat(ts.unpaid_total_usd) || 0
+  
+  // Card 1: "Tổng thu nhập tháng này" (Formula: Received this month + Unpaid created this month)
+  const unpaidThisMonth = parseInt(ts.unpaid_this_month) || 0
+  const unpaidThisMonthUSD = parseFloat(ts.unpaid_this_month_usd) || 0
+  const totalPotentialIncome = actuallyReceivedThisMonth + unpaidThisMonth
+  const totalPotentialIncomeUSD = actuallyReceivedThisMonthUSD + unpaidThisMonthUSD
 
   res.json({
     totalTasks,
     completedTasks,
     activeTasks: parseInt(ts.active_tasks) || 0,
-    monthlyIncome: monthlyIncome + paidThisMonth,
-    monthlyTotalIncome: allTasksThisMonth + monthlyIncome,
-    unpaidTotal: parseInt(ts.unpaid_total) || 0,
-    totalIncome: allTasksThisMonth + monthlyIncome,
+    monthlyIncome: actuallyReceivedThisMonth,
+    monthlyIncomeUSD: actuallyReceivedThisMonthUSD,
+    monthlyTotalIncome: totalPotentialIncome,
+    monthlyTotalIncomeUSD: totalPotentialIncomeUSD,
+    unpaidTotal: totalUnpaidGlobal,
+    unpaidTotalUSD: totalUnpaidGlobalUSD,
+    totalIncome: actuallyReceivedThisMonth,
+    totalIncomeUSD: actuallyReceivedThisMonthUSD,
     completionRate,
     monthlyTrend: monthlyTrend.rows.map(r => ({
       name: r.name,

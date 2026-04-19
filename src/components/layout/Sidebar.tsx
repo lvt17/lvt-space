@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { NAV_ITEMS } from '@/data/mockData'
 import { useAuth } from '@/contexts/AuthContext'
 import { FiLogOut, FiSettings } from 'react-icons/fi'
@@ -11,6 +12,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     const { user, signOut } = useAuth()
+    const { t } = useTranslation()
     const navigate = useNavigate()
 
     const handleSignOut = async () => {
@@ -74,13 +76,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                         }
                     >
                         <span className="material-icons-round text-[1.25rem]">{item.icon}</span>
-                        <span className="font-medium text-[0.8125rem]">{item.label}</span>
+                        <span className="font-medium text-[0.8125rem]">{t(`nav.${item.label}`)}</span>
                     </NavLink>
                 ))}
 
                 <div className="pt-3 pb-1.5 px-3.5">
                     <p className="text-[0.5625rem] uppercase font-bold text-text-muted tracking-widest">
-                        Hệ thống
+                        {t('nav.system', 'Hệ thống')}
                     </p>
                 </div>
                 <NavLink
@@ -94,7 +96,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     }
                 >
                     <FiSettings className="text-[1.25rem]" />
-                    <span className="font-medium text-[0.8125rem]">Cài đặt</span>
+                    <span className="font-medium text-[0.8125rem]">{t('nav.settings')}</span>
                 </NavLink>
             </nav>
 
@@ -115,7 +117,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                     <button
                         onClick={handleSignOut}
                         className="w-8 h-8 rounded-lg flex items-center justify-center text-text-muted hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
-                        title="Đăng xuất"
+                        title={t('common.logout', 'Đăng xuất')}
                     >
                         <FiLogOut className="text-base" />
                     </button>

@@ -1,0 +1,84 @@
+{
+  "common": {
+    "loading": "Đang tải...",
+    "save": "Lưu",
+    "cancel": "Hủy",
+    "edit": "Sửa",
+    "delete": "Xóa",
+    "refresh": "Làm mới",
+    "actions": "Thao tác",
+    "search": "Tìm kiếm...",
+    "all": "Tất cả",
+    "status": "Trạng thái",
+    "date": "Ngày",
+    "vnd": "VNĐ",
+    "usd": "USD"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "tasks": "Quản lý Task",
+    "income": "Thu nhập",
+    "checklist": "Checklist",
+    "notes": "Ghi chú",
+    "settings": "Cài đặt"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "stats": {
+      "total_income": "Tổng thu nhập tháng này",
+      "received_income": "Đã nhận tháng này",
+      "unpaid_total": "Chưa thanh toán",
+      "completion_rate": "Hoàn thành",
+      "active_tasks": "Công việc đang làm"
+    },
+    "charts": {
+      "income_trend": "Xu hướng thu nhập",
+      "performance": "Hiệu suất các tháng"
+    },
+    "table": {
+      "month": "Tháng",
+      "revenue": "Doanh thu",
+      "total_tasks": "Tổng việc",
+      "completed": "Hoàn thành"
+    }
+  },
+  "tasks": {
+    "title": "Dự án đang hoạt động & Thanh toán",
+    "add_task": "Thêm công việc",
+    "task_name": "Tên công việc",
+    "deadline": "Hạn chót",
+    "price": "Giá",
+    "status_label": "Trạng thái",
+    "is_paid": "Đã TT",
+    "description": "Mô tả",
+    "placeholder": {
+      "name": "Nhập tên công việc...",
+      "price": "Nhập giá...",
+      "search": "Tìm kiếm công việc..."
+    },
+    "filter": {
+      "all": "Công việc đang làm",
+      "unpaid": "Chưa thanh toán"
+    },
+    "status": {
+      "pending": "Chờ xử lý",
+      "processing": "Đang làm",
+      "completed": "Hoàn thành",
+      "cancelled": "Đã hủy"
+    }
+  },
+  "income": {
+    "title": "Thu nhập đã nhận",
+    "received_this_month": "Tổng thu nhập tháng này",
+    "add_income": "Thêm thu nhập",
+    "task_name": "Tên công việc",
+    "category": "Loại",
+    "amount": "Số tiền",
+    "received_date": "Ngày nhận",
+    "placeholder": {
+      "task_name": "VD: Website ABC",
+      "category": "Chọn loại",
+      "amount": "1m5"
+    }
+  }
+}

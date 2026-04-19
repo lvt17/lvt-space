@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
     }
 
     const { rows: incomeRows } = await pool.query(
-        `SELECT id, task_name, category, received_date, amount, status, created_at, 'income' as source
+        `SELECT id, task_name, category, received_date, amount, status, created_at, currency, original_amount, 'income' as source
          FROM income_records ${incomeFilter} ORDER BY received_date DESC`,
         incomeParams
     )
@@ -37,7 +37,7 @@ router.get('/', async (req, res) => {
     const { rows: paidTaskRows } = await pool.query(
         `SELECT id, name as task_name, 'Phí dịch vụ' as category, 
          COALESCE(updated_at::date, created_at::date) as received_date, 
-         price as amount, 'completed' as status, created_at, 'task' as source
+         price as amount, 'completed' as status, created_at, currency, original_amount, 'task' as source
          FROM tasks ${taskFilter} ORDER BY updated_at DESC`,
         taskParams
     )
@@ -72,32 +72,39 @@ router.get('/monthly-total', async (req, res) => {
     }
 
     const { rows: incomeTotal } = await pool.query(`
-    SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS count
+    SELECT 
+        COALESCE(SUM(amount), 0) AS total, 
+        COALESCE(SUM(original_amount) FILTER (WHERE currency = 'USD'), 0) AS total_usd,
+        COUNT(*) AS count
     FROM income_records
     WHERE user_id = $1 ${incomeDateFilter}
   `, incomeParams)
 
     const { rows: taskTotal } = await pool.query(`
-    SELECT COALESCE(SUM(price), 0) AS total, COUNT(*) AS count
+    SELECT 
+        COALESCE(SUM(price), 0) AS total, 
+        COALESCE(SUM(original_amount) FILTER (WHERE currency = 'USD'), 0) AS total_usd,
+        COUNT(*) AS count
     FROM tasks
     WHERE user_id = $1 AND is_paid = true ${taskDateFilter}
   `, taskParams)
 
     const total = parseInt(String(incomeTotal[0].total)) + parseInt(String(taskTotal[0].total))
+    const totalUSD = parseFloat(String(incomeTotal[0].total_usd)) + parseFloat(String(taskTotal[0].total_usd))
     const count = parseInt(String(incomeTotal[0].count)) + parseInt(String(taskTotal[0].count))
 
-    res.json({ total, count: String(count) })
+    res.json({ total, totalUSD, count: String(count) })
 })
 
 // POST create income record
 router.post('/', async (req, res) => {
-    const { task_name, category, received_date, amount, status = 'completed' } = req.body
+    const { task_name, category, received_date, amount, status = 'completed', currency, original_amount } = req.body
     // Default to today in Vietnam timezone if no date provided
     const date = received_date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' })
     const { rows } = await pool.query(
-        `INSERT INTO income_records (task_name, category, received_date, amount, status, user_id)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *, 'income' as source`,
-        [task_name, category || null, date, amount || 0, status, req.userId]
+        `INSERT INTO income_records (task_name, category, received_date, amount, status, user_id, currency, original_amount)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *, 'income' as source`,
+        [task_name, category || null, date, amount || 0, status, req.userId, currency || 'VND', original_amount || 0]
     )
     res.status(201).json(rows[0])
 })

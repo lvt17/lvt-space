@@ -14,18 +14,27 @@ router.get('/', async (req, res) => {
 
 // POST create task
 router.post('/', async (req, res) => {
-    const { name, deadline, price, status = 'pending', description } = req.body
+    const { name, deadline, price, status = 'pending', description, currency, original_amount } = req.body
     const { rows } = await pool.query(
-        `INSERT INTO tasks (name, deadline, price, status, description, user_id)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [name, deadline || null, price || 0, status, description || null, req.userId]
+        `INSERT INTO tasks (name, deadline, price, status, description, user_id, currency, original_amount)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [
+            name,
+            deadline || null,
+            price || 0,
+            status,
+            description || null,
+            req.userId,
+            currency || 'VND',
+            original_amount || 0
+        ]
     )
     res.status(201).json(rows[0])
 })
 
 // PUT update task
 router.put('/:id', async (req, res) => {
-    const { name, deadline, price, status, is_paid, description } = req.body
+    const { name, deadline, price, status, is_paid, description, currency, original_amount } = req.body
     const { rows } = await pool.query(
         `UPDATE tasks
      SET name = COALESCE($1, name),
@@ -34,9 +43,16 @@ router.put('/:id', async (req, res) => {
          status = COALESCE($4, status),
          is_paid = COALESCE($5, is_paid),
          description = COALESCE($6, description),
-         updated_at = NOW()
-     WHERE id = $7 AND user_id = $8 RETURNING *`,
-        [name, deadline, price, status, is_paid, description, req.params.id, req.userId]
+         currency = COALESCE($7, currency),
+         original_amount = COALESCE($8, original_amount),
+         updated_at = NOW(),
+         paid_at = CASE 
+           WHEN $5 = true AND (is_paid = false OR paid_at IS NULL) THEN NOW()
+           WHEN $5 = false THEN NULL
+           ELSE paid_at
+         END
+     WHERE id = $9 AND user_id = $10 RETURNING *`,
+        [name, deadline, price, status, is_paid, description, currency, original_amount, req.params.id, req.userId]
     )
     if (!rows.length) return res.status(404).json({ error: 'Task not found' })
     res.json(rows[0])
@@ -45,8 +61,11 @@ router.put('/:id', async (req, res) => {
 // PATCH toggle paid
 router.patch('/:id/toggle-paid', async (req, res) => {
     const { rows } = await pool.query(
-        `UPDATE tasks SET is_paid = NOT is_paid, updated_at = NOW()
-     WHERE id = $1 AND user_id = $2 RETURNING *`,
+        `UPDATE tasks 
+         SET is_paid = NOT is_paid, 
+             updated_at = NOW(),
+             paid_at = CASE WHEN NOT is_paid THEN NOW() ELSE NULL END
+         WHERE id = $1 AND user_id = $2 RETURNING *`,
         [req.params.id, req.userId]
     )
     if (!rows.length) return res.status(404).json({ error: 'Task not found' })

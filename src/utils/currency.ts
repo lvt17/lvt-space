@@ -12,7 +12,13 @@
  * Plain integers and floats are returned unchanged.
  */
 export function parseCurrency(input: string): number {
-    const raw = input.trim().toLowerCase().replace(/,/g, '').replace(/\s/g, '')
+    let raw = input.trim().toLowerCase().replace(/,/g, '').replace(/\s/g, '')
+
+    // Handle $ prefix or suffix
+    const isUSD = raw.startsWith('$') || raw.endsWith('$')
+    if (isUSD) {
+        raw = raw.replace('$', '')
+    }
 
     // Pattern: 1m4, 2m5, 1tr4, 2tr5 (millions with decimal shorthand)
     const mPattern = raw.match(/^(\d+)(m|tr)(\d+)?$/)
@@ -42,6 +48,7 @@ export function parseCurrency(input: string): number {
     return num
 }
 
+
 /**
  * Format a raw number into Vietnamese đồng display string.
  * e.g. 1400000 → "1.400.000₫"
@@ -69,4 +76,37 @@ export function formatVNDShort(amount: number): string {
         return Number.isInteger(k) ? `${k}k` : `${k.toFixed(1).replace('.', ',')}k`
     }
     return amount.toLocaleString('vi-VN') + '₫'
+}
+/**
+ * Format a raw number into USD display string.
+ * e.g. 50.5 → "$50.5"
+ */
+export function formatUSD(amount: number | string): string {
+    const num = Number(amount)
+    if (isNaN(num)) return '$0'
+    // Format with commas, e.g. 1000 -> $1,000
+    return '$' + num.toLocaleString('en-US')
+}
+
+/**
+ * Format a dual currency display.
+ * e.g. (1400000, 58.5) → "1.400.000₫ (58.5$)"
+ */
+export function formatDualCurrency(vnd: number, usd?: number): string {
+    const vndPart = formatVND(vnd)
+    if (usd && usd > 0) {
+        return `${vndPart} (${usd.toLocaleString('en-US')}$)`
+    }
+    return vndPart
+}
+
+/**
+ * Short format for compact display with dual currency support.
+ */
+export function formatDualCurrencyShort(vnd: number, usd?: number): string {
+    const vndPart = formatVNDShort(vnd)
+    if (usd && usd > 0) {
+        return `${vndPart} (${usd.toLocaleString('en-US')}$)`
+    }
+    return vndPart
 }

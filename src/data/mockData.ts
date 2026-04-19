@@ -9,10 +9,10 @@ import type {
 } from '@/types'
 
 export const NAV_ITEMS: NavItem[] = [
-    { label: 'Dashboard', path: '/dashboard', icon: 'grid_view' },
-    { label: 'Quản lý công việc', path: '/tasks', icon: 'task_alt' },
-    { label: 'Đã nhận tháng này', path: '/income', icon: 'account_balance_wallet' },
-    { label: 'Note', path: '/checklists', icon: 'checklist' },
+    { label: 'dashboard', path: '/dashboard', icon: 'grid_view' },
+    { label: 'tasks', path: '/tasks', icon: 'task_alt' },
+    { label: 'income', path: '/income', icon: 'account_balance_wallet' },
+    { label: 'checklist', path: '/checklists', icon: 'checklist' },
 ]
 
 export const DASHBOARD_STATS: StatCardData[] = [

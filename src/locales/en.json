@@ -1,0 +1,84 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "refresh": "Refresh",
+    "actions": "Actions",
+    "search": "Search...",
+    "all": "All",
+    "status": "Status",
+    "date": "Date",
+    "vnd": "VND",
+    "usd": "USD"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "tasks": "Tasks",
+    "income": "Income",
+    "checklist": "Checklist",
+    "notes": "Notes",
+    "settings": "Settings"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "stats": {
+      "total_income": "Total Income This Month",
+      "received_income": "Received This Month",
+      "unpaid_total": "Unpaid Total",
+      "completion_rate": "Completion Rate",
+      "active_tasks": "Active Tasks"
+    },
+    "charts": {
+      "income_trend": "Income Trend",
+      "performance": "Monthly Performance"
+    },
+    "table": {
+      "month": "Month",
+      "revenue": "Revenue",
+      "total_tasks": "Total Tasks",
+      "completed": "Completed"
+    }
+  },
+  "tasks": {
+    "title": "Active Projects & Payments",
+    "add_task": "Add New Task",
+    "task_name": "Task Name",
+    "deadline": "Deadline",
+    "price": "Price",
+    "status_label": "Status",
+    "is_paid": "Paid",
+    "description": "Description",
+    "placeholder": {
+      "name": "Enter task name...",
+      "price": "Enter price...",
+      "search": "Search tasks..."
+    },
+    "filter": {
+      "all": "Active Tasks",
+      "unpaid": "Unpaid Only"
+    },
+    "status": {
+      "pending": "Pending",
+      "processing": "In Progress",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    }
+  },
+  "income": {
+    "title": "Income Received",
+    "received_this_month": "Total Received This Month",
+    "add_income": "Add Income",
+    "task_name": "Task Name",
+    "category": "Category",
+    "amount": "Amount",
+    "received_date": "Received Date",
+    "placeholder": {
+      "task_name": "e.g. Website XYZ",
+      "category": "Select category",
+      "amount": "100$"
+    }
+  }
+}

@@ -1,25 +1,42 @@
 import Header from '@/components/layout/Header'
 import StatCard from '@/components/ui/StatCard'
 import IncomeChart from '@/components/charts/IncomeChart'
-import { formatVND } from '@/utils/currency'
+import { formatVND, formatUSD } from '@/utils/currency'
 import { useDataCache } from '@/contexts/DataCacheContext'
 import type { StatCardData } from '@/types'
+import { useTranslation } from 'react-i18next'
 
 export default function DashboardPage() {
     const { dashboardStats: stats, dashboardPerformance: performance, dashboardLoading: loading } = useDataCache()
+    const { t } = useTranslation()
 
     const cards: StatCardData[] = stats
         ? [
-            { title: 'Tổng thu nhập tháng này', value: formatVND(stats.monthlyTotalIncome), icon: 'account_balance_wallet' },
-            { title: 'Đã nhận tháng này', value: formatVND(stats.totalIncome), icon: 'savings' },
-            { title: 'Chưa thanh toán', value: formatVND(stats.unpaidTotal), icon: 'hourglass_top' },
-            { title: 'Hoàn thành', value: `${stats.completionRate}%`, subtitle: `${stats.completedTasks}/${stats.totalTasks}`, icon: 'check_circle' },
+            { 
+                title: t('dashboard.stats.total_income'), 
+                value: formatVND(stats.monthlyTotalIncome), 
+                subtitle: stats.monthlyTotalIncomeUSD && stats.monthlyTotalIncomeUSD > 0 ? `(${formatUSD(stats.monthlyTotalIncomeUSD)})` : undefined,
+                icon: 'account_balance_wallet' 
+            },
+            { 
+                title: t('dashboard.stats.received_income'), 
+                value: formatVND(stats.totalIncome), 
+                subtitle: stats.totalIncomeUSD && stats.totalIncomeUSD > 0 ? `(${formatUSD(stats.totalIncomeUSD)})` : undefined,
+                icon: 'savings' 
+            },
+            { 
+                title: t('dashboard.stats.unpaid_total'), 
+                value: formatVND(stats.unpaidTotal), 
+                subtitle: stats.unpaidTotalUSD && stats.unpaidTotalUSD > 0 ? `(${formatUSD(stats.unpaidTotalUSD)})` : undefined,
+                icon: 'hourglass_top' 
+            },
+            { title: t('dashboard.stats.completion_rate'), value: `${stats.completionRate}%`, subtitle: `${stats.completedTasks}/${stats.totalTasks}`, icon: 'check_circle' },
         ]
         : []
 
     return (
         <>
-            <Header title="Dashboard" />
+            <Header title={t('dashboard.title')} />
 
             {loading && !stats ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -42,16 +59,16 @@ export default function DashboardPage() {
 
                     <div className="glass-card rounded-2xl overflow-hidden">
                         <div className="p-4 sm:p-6 flex justify-between items-center border-b border-border">
-                            <h3 className="text-base md:text-lg font-bold text-text-primary">Hiệu suất các tháng</h3>
+                            <h3 className="text-base md:text-lg font-bold text-text-primary">{t('dashboard.charts.performance')}</h3>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left min-w-[36rem]">
                                 <thead>
                                     <tr className="text-[0.625rem] text-text-muted font-bold uppercase tracking-wider bg-surface-secondary">
-                                        <th className="px-4 sm:px-6 py-3 sm:py-4">Tháng</th>
-                                        <th className="px-4 sm:px-6 py-3 sm:py-4">Doanh thu</th>
-                                        <th className="px-4 sm:px-6 py-3 sm:py-4">Tổng việc</th>
-                                        <th className="px-4 sm:px-6 py-3 sm:py-4">Hoàn thành</th>
+                                        <th className="px-4 sm:px-6 py-3 sm:py-4">{t('dashboard.table.month')}</th>
+                                        <th className="px-4 sm:px-6 py-3 sm:py-4">{t('dashboard.table.revenue')}</th>
+                                        <th className="px-4 sm:px-6 py-3 sm:py-4">{t('dashboard.table.total_tasks')}</th>
+                                        <th className="px-4 sm:px-6 py-3 sm:py-4">{t('dashboard.table.completed')}</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border-light">

@@ -30,12 +30,14 @@ export interface TaskRow {
     status: string
     is_paid: boolean
     description: string | null
+    currency?: string
+    original_amount?: number
     created_at: string
 }
 
 export const taskApi = {
     list: () => request<TaskRow[]>('/tasks'),
-    create: (data: { name: string; deadline?: string; price: number; description?: string }) =>
+    create: (data: { name: string; deadline?: string; price: number; description?: string; currency?: string; original_amount?: number }) =>
         request<TaskRow>('/tasks', { method: 'POST', body: JSON.stringify(data) }),
     update: (id: string, data: Partial<TaskRow>) =>
         request<TaskRow>(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -76,6 +78,8 @@ export interface IncomeRow {
     received_date: string
     amount: number
     status: string
+    currency?: string
+    original_amount?: number
 }
 
 export interface IncomePage {
@@ -89,8 +93,8 @@ export const incomeApi = {
     list: (page = 1, limit = 10, month?: string) =>
         request<IncomePage>(`/income?page=${page}&limit=${limit}${month ? `&month=${month}` : ''}`),
     monthlyTotal: (month?: string) =>
-        request<{ total: number; count: string }>(`/income/monthly-total${month ? `?month=${month}` : ''}`),
-    create: (data: { task_name: string; category?: string; received_date?: string; amount: number }) =>
+        request<{ total: number; totalUSD?: number; count: string }>(`/income/monthly-total${month ? `?month=${month}` : ''}`),
+    create: (data: { task_name: string; category?: string; received_date?: string; amount: number; currency?: string; original_amount?: number }) =>
         request<IncomeRow>('/income', { method: 'POST', body: JSON.stringify(data) }),
     remove: (id: string) =>
         request<void>(`/income/${id}`, { method: 'DELETE' }),
@@ -102,9 +106,13 @@ export interface DashboardStats {
     completedTasks: number
     activeTasks: number
     monthlyIncome: number
+    monthlyIncomeUSD?: number
     monthlyTotalIncome: number
+    monthlyTotalIncomeUSD?: number
     unpaidTotal: number
+    unpaidTotalUSD?: number
     totalIncome: number
+    totalIncomeUSD?: number
     completionRate: number
     monthlyTrend: { name: string; income: number }[]
 }

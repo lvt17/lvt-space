@@ -3,6 +3,8 @@ import {
 } from 'recharts'
 import type { MonthlyIncome } from '@/types'
 import { useTheme } from '@/contexts/ThemeContext'
+import { useTranslation } from 'react-i18next'
+import { formatVND } from '@/utils/currency'
 
 interface IncomeChartProps {
     data: MonthlyIncome[]
@@ -10,6 +12,7 @@ interface IncomeChartProps {
 
 export default function IncomeChart({ data }: IncomeChartProps) {
     const { resolvedDark, paletteDef } = useTheme()
+    const { t, i18n } = useTranslation()
     const primary = paletteDef.primary
 
     const tooltipStyle = resolvedDark
@@ -37,8 +40,8 @@ export default function IncomeChart({ data }: IncomeChartProps) {
         <div className="glass-card rounded-2xl p-8 mb-8">
             <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h3 className="text-lg font-bold text-text-primary">Xu hướng Thu nhập Hàng tháng</h3>
-                    <p className="text-text-muted text-sm">Income performance over the last 12 months</p>
+                    <h3 className="text-lg font-bold text-text-primary">{t('dashboard.charts.income_trend')}</h3>
+                    <p className="text-text-muted text-sm">{i18n.language === 'vi' ? 'Hiệu suất thu nhập trong 12 tháng qua' : 'Income performance over the last 12 months'}</p>
                 </div>
             </div>
             <ResponsiveContainer width="100%" height={280}>
@@ -66,7 +69,7 @@ export default function IncomeChart({ data }: IncomeChartProps) {
                     />
                     <Tooltip
                         contentStyle={tooltipStyle}
-                        formatter={(value: number) => [`${value.toLocaleString('vi-VN')}₫`, 'Thu nhập']}
+                        formatter={(value: number) => [formatVND(value), t('nav.income')]}
                     />
                     <Area
                         type="monotone"
